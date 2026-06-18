@@ -1,4 +1,4 @@
-﻿namespace MIS_Project_API.DTOs
+﻿namespace MIS_Project_API.Models
 {
     public class LoginRequest
     {
