@@ -1,22 +1,45 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi; // Chuẩn OpenAPI v2 mới nhất của .NET 10
 using MIS_Project_API.Models;
 using System.Text;
 
-// --- KHỞI TẠO BUILDER (ÔNG TỔ CỦA MỌI THỨ) NẰM Ở ĐÂY ---
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
 
-// 1. Đăng ký Database Context
+// --- CẤU HÌNH SWAGGER BẢN .NET 10 MỚI NHẤT ---
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "MIS Project API", Version = "v1" });
+
+    // 1. Định nghĩa cái ổ khóa
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "Nhập JWT Token của bạn theo định dạng này: Bearer {token}",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+
+    // 2. Bắt buộc Swagger dùng ổ khóa này (Cú pháp chuẩn .NET 10 / Swashbuckle 10+)
+    c.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        {
+            // Dùng đúng class Reference chuyên dụng mà bản mới yêu cầu
+            new OpenApiSecuritySchemeReference("Bearer"),
+            new List<string>()
+        }
+    });
+});
+
+// --- ĐĂNG KÝ CÁC DỊCH VỤ KHÁC ---
 builder.Services.AddDbContext<MisProjectManagementContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// 2. Đăng ký JWT Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -36,7 +59,7 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// --- CẤU HÌNH PIPELINE ---
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -48,7 +71,5 @@ app.UseHttpsRedirection();
 // QUAN TRỌNG: UseAuthentication phải nằm TRƯỚC UseAuthorization
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.Run();
