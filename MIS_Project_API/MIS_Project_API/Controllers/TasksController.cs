@@ -5,6 +5,12 @@ using MIS_Project_API.Interfaces;
 
 namespace MIS_Project_API.Controllers
 {
+    // Dinh nghia lop model ngay trong controller de khong lam rac thu muc DTO
+    public class UpdateTaskStatusRequest
+    {
+        public string Status { get; set; } = null!;
+    }
+
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
@@ -17,7 +23,6 @@ namespace MIS_Project_API.Controllers
             _taskService = taskService;
         }
 
-        // API Lấy danh sách cây WBS của 1 dự án
         [HttpGet("project/{projectId}/wbs")]
         public async Task<ActionResult<IEnumerable<TaskDto>>> GetWbs(int projectId)
         {
@@ -25,7 +30,6 @@ namespace MIS_Project_API.Controllers
             return Ok(wbs);
         }
 
-        // API Tạo Task mới
         [HttpPost]
         [Authorize(Roles = "Manager,Admin")]
         public async Task<ActionResult<TaskDto>> Create([FromBody] CreateTaskDto createDto)
@@ -41,6 +45,18 @@ namespace MIS_Project_API.Controllers
             var success = await _taskService.UpdateTaskDatesAndShiftChildrenAsync(id, updateDto);
             if (!success) return NotFound("Không tìm thấy Task hoặc Task chưa có ngày bắt đầu.");
             return NoContent();
+        }
+
+        [HttpPatch("{id}/status")]
+        public async Task<ActionResult> UpdateStatus(int id, [FromBody] UpdateTaskStatusRequest updateDto)
+        {
+            var result = await _taskService.UpdateTaskStatusAsync(id, updateDto.Status);
+            if (!result.Success)
+            {
+                if (result.Message.Contains("Không tìm thấy")) return NotFound(result.Message);
+                return BadRequest(result.Message); 
+            }
+            return Ok(new { message = result.Message });
         }
     }
 }

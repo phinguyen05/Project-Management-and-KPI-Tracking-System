@@ -2,7 +2,6 @@
 using MIS_Project_API.DTOs.Task;
 using MIS_Project_API.Interfaces;
 using MIS_Project_API.Models;
-// CHIÊU THỨC ALIAS: Đổi tên Task của Database thành DbTask để không bị đụng hàng
 using DbTask = MIS_Project_API.Models.Task;
 
 namespace MIS_Project_API.Services
@@ -16,7 +15,7 @@ namespace MIS_Project_API.Services
             _context = context;
         }
 
-        // 1. THUẬT TOÁN WBS: Lấy và xếp Task thành dạng cây cha-con
+        // 1. THUẬT TOÁN WBS
         public async Task<IEnumerable<TaskDto>> GetProjectTasksWbsAsync(int projectId)
         {
             var allTasks = await _context.Tasks
@@ -35,9 +34,7 @@ namespace MIS_Project_API.Services
                 AssigneeName = t.Assignee != null ? t.Assignee.FullName : "Chưa giao việc",
                 Status = t.Status,
                 EstimatedTime = t.EstimatedTime ?? 0,
-                StartDate = t.StartDate.HasValue
-                            ? t.StartDate.Value.ToDateTime(TimeOnly.MinValue)
-                            : null,
+                StartDate = t.StartDate.HasValue ? t.StartDate.Value.ToDateTime(TimeOnly.MinValue) : null,
                 DueDate = t.Deadline,
                 RiskFlag = t.RiskFlag ?? false,
                 SubTasks = new List<TaskDto>()
@@ -72,9 +69,7 @@ namespace MIS_Project_API.Services
                 Description = createDto.Description,
                 AssigneeId = createDto.AssigneeId,
                 EstimatedTime = createDto.EstimatedTime,
-                StartDate = createDto.StartDate.HasValue
-                            ? DateOnly.FromDateTime(createDto.StartDate.Value)
-                            : null,
+                StartDate = createDto.StartDate.HasValue ? DateOnly.FromDateTime(createDto.StartDate.Value) : null,
                 Deadline = createDto.DueDate,
                 Status = "To_Do",
                 RiskFlag = false
@@ -96,15 +91,13 @@ namespace MIS_Project_API.Services
                 AssigneeName = assignee != null ? assignee.FullName : "Chưa giao việc",
                 Status = taskModel.Status,
                 EstimatedTime = taskModel.EstimatedTime ?? 0,
-                StartDate = taskModel.StartDate.HasValue
-                            ? taskModel.StartDate.Value.ToDateTime(TimeOnly.MinValue)
-                            : null,
+                StartDate = taskModel.StartDate.HasValue ? taskModel.StartDate.Value.ToDateTime(TimeOnly.MinValue) : null,
                 DueDate = taskModel.Deadline,
                 RiskFlag = taskModel.RiskFlag ?? false
             };
         }
 
-        // 3. CẬP NHẬT NGÀY & KÍCH HOẠT HIỆU ỨNG DOMINO (GANTT CHART)
+        // 3. CẬP NHẬT NGÀY & KÍCH HOẠT HIỆU ỨNG DOMINO
         public async Task<bool> UpdateTaskDatesAndShiftChildrenAsync(int taskId, UpdateTaskDateDto updateDto)
         {
             var rootTask = await _context.Tasks.FindAsync(taskId);
@@ -118,16 +111,10 @@ namespace MIS_Project_API.Services
 
             if (offsetDays != 0)
             {
-                var allProjectTasks = await _context.Tasks
-                    .Where(t => t.ProjectId == rootTask.ProjectId)
-                    .ToListAsync();
-
+                var allProjectTasks = await _context.Tasks.Where(t => t.ProjectId == rootTask.ProjectId).ToListAsync();
                 var taskIds = allProjectTasks.Select(t => t.TaskId).ToList();
-                var allDependencies = await _context.TaskDependencies
-                    .Where(d => taskIds.Contains(d.PredecessorTaskId))
-                    .ToListAsync();
+                var allDependencies = await _context.TaskDependencies.Where(d => taskIds.Contains(d.PredecessorTaskId)).ToListAsync();
 
-                // visited: chống lặp vô hạn nếu lỡ tạo dependency vòng tròn (A -> B -> A)
                 ShiftSuccessorTasksRecursively(allProjectTasks, allDependencies, taskId, offsetDays, new HashSet<int>());
             }
 
@@ -137,7 +124,7 @@ namespace MIS_Project_API.Services
 
         private void ShiftSuccessorTasksRecursively(List<DbTask> allTasks, List<TaskDependency> allDependencies, int currentTaskId, int offsetDays, HashSet<int> visited)
         {
-            if (!visited.Add(currentTaskId)) return; // đã xử lý rồi thì bỏ qua, tránh đệ quy vô tận
+            if (!visited.Add(currentTaskId)) return;
 
             var successorIds = allDependencies
                 .Where(d => d.PredecessorTaskId == currentTaskId && d.DependencyType == "Finish_to_Start")
@@ -158,8 +145,33 @@ namespace MIS_Project_API.Services
             }
         }
 
-    
-       
-        
+        // 4. CẬP NHẬT TRẠNG THÁI TASK & KIỂM TRA LOG-TIME
+        public async Task<(bool Success, string Message)> UpdateTaskStatusAsync(int taskId, string newStatus)
+        {
+            var task = await _context.Tasks.FindAsync(taskId);
+            if (task == null) return (false, "Không tìm thấy Task.");
+
+            var validStatuses = new[] { "To_Do", "Doing", "Done", "Risk" };
+            if (!validStatuses.Contains(newStatus))
+                return (false, "Trạng thái không hợp lệ.");
+
+            if (newStatus == "Done")
+            {
+                bool hasLogTime = await _context.LogTimes.AnyAsync(lt => lt.TaskId == taskId);
+                if (!hasLogTime)
+                {
+                    return (false, "Lỗi: Bắt buộc phải báo cáo giờ làm thực tế (Log-time) trước khi đánh dấu Hoàn thành (Done).");
+                }
+                task.CompletedAt = DateTime.Now;
+            }
+            else
+            {
+                task.CompletedAt = null;
+            }
+
+            task.Status = newStatus;
+            await _context.SaveChangesAsync();
+            return (true, "Cập nhật trạng thái thành công.");
+        }
     }
 }
