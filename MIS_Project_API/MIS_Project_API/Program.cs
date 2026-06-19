@@ -1,8 +1,10 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi; // Chuẩn OpenAPI v2 mới nhất của .NET 10
+using Microsoft.OpenApi;
+using MIS_Project_API.Interfaces;
 using MIS_Project_API.Models;
+using MIS_Project_API.Services;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -10,33 +12,41 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-// --- CẤU HÌNH SWAGGER BẢN .NET 10 MỚI NHẤT ---
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "MIS Project API", Version = "v1" });
 
-    // 1. Định nghĩa cái ổ khóa
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "Nhập JWT Token của bạn theo định dạng này: Bearer {token}",
         Name = "Authorization",
         In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT"
     });
 
-    // 2. Bắt buộc Swagger dùng ổ khóa này (Cú pháp chuẩn .NET 10 / Swashbuckle 10+)
     c.AddSecurityRequirement(document => new OpenApiSecurityRequirement
     {
         {
-            // Dùng đúng class Reference chuyên dụng mà bản mới yêu cầu
             new OpenApiSecuritySchemeReference("Bearer"),
             new List<string>()
         }
     });
 });
 
-// --- ĐĂNG KÝ CÁC DỊCH VỤ KHÁC ---
+// --- CORS: cho phep Frontend React (chay port khac) goi API ---
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReactApp", policy =>
+    {
+        policy.WithOrigins("http://localhost:3000", "http://localhost:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
 builder.Services.AddDbContext<MisProjectManagementContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
@@ -55,11 +65,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+
+builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddScoped<ITaskService, TaskService>();
+
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// --- CẤU HÌNH PIPELINE ---
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -68,8 +82,12 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// QUAN TRỌNG: UseAuthentication phải nằm TRƯỚC UseAuthorization
+// CORS phai dung TRUOC Authentication/Authorization
+app.UseCors("AllowReactApp");
+
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
+
 app.Run();
