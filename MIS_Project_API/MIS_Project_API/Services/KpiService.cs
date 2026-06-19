@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using MIS_Project_API.Interfaces;
 using MIS_Project_API.Models;
+using System.Text.Json;
 
 namespace MIS_Project_API.Services
 {
@@ -16,8 +17,28 @@ namespace MIS_Project_API.Services
         // --- 1. KPI TIẾN ĐỘ (40%) ---
         public async Task<double> CalculateKpiTimelinessAsync(int userId, int month, int year)
         {
+            string monthYear = $"{month:D2}/{year}";
+            var cycle = await _context.SystemConfigs.FirstOrDefaultAsync(c => c.MonthYear == monthYear);
+
+            // Đọc hệ số phạt từ JSON trong DB (Mặc định nếu chưa có cấu hình)
+            Dictionary<string, double> penaltyFactors = new Dictionary<string, double>
+            {
+                { "1-2", 0.8 }, // Trễ 1-2 ngày tính 80%
+                { "3-5", 0.5 }, // Trễ 3-5 ngày tính 50%
+                { "over5", 0.0 } // Trễ quá 5 ngày tính 0%
+            };
+
+            if (cycle != null && !string.IsNullOrEmpty(cycle.PenaltyFactor))
+            {
+                try
+                {
+                    penaltyFactors = JsonSerializer.Deserialize<Dictionary<string, double>>(cycle.PenaltyFactor) ?? penaltyFactors;
+                }
+                catch { /* Giữ nguyên mặc định nếu JSON lỗi */ }
+            }
+
             var tasksInMonth = await _context.Tasks
-                .Where(t => t.AssigneeId == userId && t.Status == "Done" && t.CompletedAt.HasValue 
+                .Where(t => t.AssigneeId == userId && t.Status == "Done" && t.CompletedAt.HasValue
                          && t.CompletedAt.Value.Month == month && t.CompletedAt.Value.Year == year)
                 .ToListAsync();
 
@@ -29,20 +50,26 @@ namespace MIS_Project_API.Services
             foreach (var task in tasksInMonth)
             {
                 double est = task.EstimatedTime ?? 0;
-                if (!task.Deadline.HasValue)
+
+                // Nếu task không có deadline hoặc được cắm cờ Rủi ro (đã duyệt) -> Miễn phạt
+                if (!task.Deadline.HasValue || (task.RiskFlag ?? false))
                 {
                     earnedEstTime += est;
                     continue;
                 }
 
                 int delayDays = (task.CompletedAt.Value.Date - task.Deadline.Value.Date).Days;
-                if (delayDays <= 0) earnedEstTime += est;
+                if (delayDays <= 0)
+                {
+                    earnedEstTime += est;
+                }
                 else
                 {
                     double penalty = 0.0;
-                    if (delayDays >= 1 && delayDays <= 2) penalty = 0.8;
-                    else if (delayDays >= 3 && delayDays <= 5) penalty = 0.5;
-                    
+                    if (delayDays >= 1 && delayDays <= 2) penalty = penaltyFactors.ContainsKey("1-2") ? penaltyFactors["1-2"] : 0.8;
+                    else if (delayDays >= 3 && delayDays <= 5) penalty = penaltyFactors.ContainsKey("3-5") ? penaltyFactors["3-5"] : 0.5;
+                    else penalty = penaltyFactors.ContainsKey("over5") ? penaltyFactors["over5"] : 0.0;
+
                     earnedEstTime += (est * penalty);
                 }
             }
@@ -55,7 +82,7 @@ namespace MIS_Project_API.Services
         public async Task<double> CalculateKpiEfficiencyAsync(int userId, int month, int year)
         {
             var tasksInMonth = await _context.Tasks
-                .Where(t => t.AssigneeId == userId && t.Status == "Done" && t.CompletedAt.HasValue 
+                .Where(t => t.AssigneeId == userId && t.Status == "Done" && t.CompletedAt.HasValue
                          && t.CompletedAt.Value.Month == month && t.CompletedAt.Value.Year == year)
                 .ToListAsync();
 
@@ -64,11 +91,12 @@ namespace MIS_Project_API.Services
             var taskIds = tasksInMonth.Select(t => t.TaskId).ToList();
             double totalEstTime = tasksInMonth.Sum(t => t.EstimatedTime ?? 0);
 
+            // FIX: Chỉ tính giờ đã được duyệt (Approved)
             double totalActualTime = await _context.LogTimes
-                .Where(lt => taskIds.Contains(lt.TaskId) && lt.Status != "Rejected")
+                .Where(lt => taskIds.Contains(lt.TaskId) && lt.Status == "Approved")
                 .SumAsync(lt => lt.ActualHours);
 
-            if (totalActualTime == 0) return 0; 
+            if (totalActualTime == 0) return 0;
 
             double kpiEfficiency = (totalEstTime / totalActualTime) * 100.0;
             if (kpiEfficiency > 150.0) kpiEfficiency = 150.0; // Trần 150%
@@ -81,16 +109,17 @@ namespace MIS_Project_API.Services
         {
             string monthYear = $"{month:D2}/{year}";
             var cycle = await _context.SystemConfigs.FirstOrDefaultAsync(c => c.MonthYear == monthYear);
-            int standardHours = cycle?.StandardWorkingHours ?? 160; 
+            int standardHours = cycle?.StandardWorkingHours ?? 160;
 
             var leaveDaysCount = await _context.LeaveDays
                 .CountAsync(l => l.UserId == userId && l.LeaveDate.Month == month && l.LeaveDate.Year == year && l.Status == "Approved");
 
             int adjustedStandardHours = standardHours - (leaveDaysCount * 8);
-            if (adjustedStandardHours <= 0) adjustedStandardHours = 8; 
+            if (adjustedStandardHours <= 0) adjustedStandardHours = 8;
 
+            // FIX: Chỉ tính giờ đã được duyệt (Approved)
             var totalActualTime = await _context.LogTimes
-                .Where(lt => lt.UserId == userId && lt.LogDate.Month == month && lt.LogDate.Year == year && lt.Status != "Rejected")
+                .Where(lt => lt.UserId == userId && lt.LogDate.Month == month && lt.LogDate.Year == year && lt.Status == "Approved")
                 .SumAsync(lt => lt.ActualHours);
 
             double kpiCapacity = (totalActualTime / adjustedStandardHours) * 100.0;

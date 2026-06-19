@@ -146,21 +146,29 @@ namespace MIS_Project_API.Services
         }
 
         // 4. CẬP NHẬT TRẠNG THÁI TASK & KIỂM TRA LOG-TIME
-        public async Task<(bool Success, string Message)> UpdateTaskStatusAsync(int taskId, string newStatus)
+        public async Task<(bool Success, string Message)> UpdateTaskStatusAsync(int taskId, string newStatus, int currentUserId, bool isManager)
         {
             var task = await _context.Tasks.FindAsync(taskId);
             if (task == null) return (false, "Không tìm thấy Task.");
 
-            var validStatuses = new[] { "To_Do", "Doing", "Done", "Risk" };
+            // Kiem tra quyen: Chi Assignee hoac Manager/Admin moi duoc sua
+            if (task.AssigneeId != currentUserId && !isManager)
+            {
+                return (false, "Bạn không có quyền cập nhật trạng thái của Task này.");
+            }
+
+            // Da bo "Risk" ra khoi day
+            var validStatuses = new[] { "To_Do", "Doing", "Done" };
             if (!validStatuses.Contains(newStatus))
-                return (false, "Trạng thái không hợp lệ.");
+                return (false, "Trạng thái không hợp lệ. Chỉ chấp nhận To_Do, Doing, Done.");
 
             if (newStatus == "Done")
             {
-                bool hasLogTime = await _context.LogTimes.AnyAsync(lt => lt.TaskId == taskId);
-                if (!hasLogTime)
+                // FIX LỖI 4 TẠI ĐÂY LUÔN: Done thì log-time phải là Approved
+                bool hasApprovedLogTime = await _context.LogTimes.AnyAsync(lt => lt.TaskId == taskId && lt.Status == "Approved");
+                if (!hasApprovedLogTime)
                 {
-                    return (false, "Lỗi: Bắt buộc phải báo cáo giờ làm thực tế (Log-time) trước khi đánh dấu Hoàn thành (Done).");
+                    return (false, "Lỗi: Bắt buộc phải có báo cáo giờ làm (Log-time) ĐÃ ĐƯỢC DUYỆT trước khi đánh dấu Hoàn thành (Done).");
                 }
                 task.CompletedAt = DateTime.Now;
             }

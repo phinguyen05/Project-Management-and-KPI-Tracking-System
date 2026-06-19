@@ -50,11 +50,17 @@ namespace MIS_Project_API.Controllers
         [HttpPatch("{id}/status")]
         public async Task<ActionResult> UpdateStatus(int id, [FromBody] UpdateTaskStatusRequest updateDto)
         {
-            var result = await _taskService.UpdateTaskStatusAsync(id, updateDto.Status);
+            // Lay thong tin user dang call API
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            int.TryParse(userIdClaim, out int currentUserId);
+            bool isManager = User.IsInRole("Manager") || User.IsInRole("Admin");
+
+            var result = await _taskService.UpdateTaskStatusAsync(id, updateDto.Status, currentUserId, isManager);
+
             if (!result.Success)
             {
-                if (result.Message.Contains("Không tìm thấy")) return NotFound(result.Message);
-                return BadRequest(result.Message); 
+                if (result.Message.Contains("Không tìm thấy") || result.Message.Contains("quyền")) return Forbid(result.Message);
+                return BadRequest(result.Message);
             }
             return Ok(new { message = result.Message });
         }

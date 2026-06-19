@@ -7,6 +7,6 @@ namespace MIS_Project_API.Interfaces
         Task<IEnumerable<TaskDto>> GetProjectTasksWbsAsync(int projectId);
         Task<TaskDto> CreateTaskAsync(CreateTaskDto createDto);
         Task<bool> UpdateTaskDatesAndShiftChildrenAsync(int taskId, UpdateTaskDateDto updateDto);
-        Task<(bool Success, string Message)> UpdateTaskStatusAsync(int taskId, string newStatus);
+        Task<(bool Success, string Message)> UpdateTaskStatusAsync(int taskId, string newStatus, int currentUserId, bool isManager);
     }
 }
