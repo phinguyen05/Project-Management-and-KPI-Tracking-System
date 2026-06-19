@@ -69,6 +69,7 @@ builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
 builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
+builder.Services.AddScoped<IKpiService, KpiService>();
 
 builder.Services.AddAuthorization();
 
@@ -91,3 +92,4 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
