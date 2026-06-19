@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using Hangfire;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -70,6 +71,11 @@ builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddScoped<IKpiService, KpiService>();
+builder.Services.AddScoped<IBackgroundJobService, BackgroundJobService>();
+
+// Cau hinh Hangfire
+builder.Services.AddHangfire(config => config.UseSqlServerStorage(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddHangfireServer();
 
 builder.Services.AddAuthorization();
 
@@ -91,5 +97,12 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+// Kich hoat Hangfire Dashboard
+app.UseHangfireDashboard();
+
+// Dang ky Cron Job chay hang ngay
+RecurringJob.AddOrUpdate<IBackgroundJobService>("CheckOverdueTasks", service => service.CheckAndAlertOverdueTasksAsync(), Cron.Daily);
+
 app.Run();
+
 
