@@ -32,4 +32,6 @@ public partial class LogTime
     public virtual User? UpdatedByNavigation { get; set; }
 
     public virtual User User { get; set; } = null!;
+    public DateTime CreatedAt { get; internal set; }
+    public string? Description { get; internal set; }
 }

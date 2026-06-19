@@ -16,4 +16,5 @@ public partial class LeaveDay
     public string? Status { get; set; }
 
     public virtual User User { get; set; } = null!;
+    public DateTime CreatedAt { get; internal set; }
 }
