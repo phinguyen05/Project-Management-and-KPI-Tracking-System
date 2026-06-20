@@ -6,6 +6,9 @@
         public double ActualHours { get; set; }
         public string? Description { get; set; }
         public DateTime LogDate { get; set; }
+
+        // ĐÃ FIX: Thêm AttachedFile
+        public string? AttachedFile { get; set; }
     }
 
     public class ApproveLogTimeDto

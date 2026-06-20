@@ -9,7 +9,7 @@ using MIS_Project_API.Services;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
-
+builder.Services.AddScoped<ILogTimeBackgroundService, LogTimeBackgroundService>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
@@ -99,6 +99,7 @@ app.MapControllers();
 
 // Kich hoat Hangfire Dashboard
 app.UseHangfireDashboard();
+
 
 // Dang ky Cron Job chay hang ngay
 RecurringJob.AddOrUpdate<IBackgroundJobService>("CheckOverdueTasks", service => service.CheckAndAlertOverdueTasksAsync(), Cron.Daily);

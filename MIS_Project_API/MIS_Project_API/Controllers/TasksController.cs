@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using MIS_Project_API.DTOs.Task;
 using MIS_Project_API.Interfaces;
+using MIS_Project_API.Models; // ĐÃ THÊM: Để gọi được DbContext và Models
 
 namespace MIS_Project_API.Controllers
 {
@@ -17,10 +19,13 @@ namespace MIS_Project_API.Controllers
     public class TasksController : ControllerBase
     {
         private readonly ITaskService _taskService;
+        private readonly MisProjectManagementContext _context; // [ĐÃ FIX]: Khai báo thêm biến _context
 
-        public TasksController(ITaskService taskService)
+        // [ĐÃ FIX]: Tiêm (Inject) MisProjectManagementContext vào Constructor
+        public TasksController(ITaskService taskService, MisProjectManagementContext context)
         {
             _taskService = taskService;
+            _context = context;
         }
 
         [HttpGet("project/{projectId}/wbs")]
@@ -63,6 +68,26 @@ namespace MIS_Project_API.Controllers
                 return BadRequest(result.Message);
             }
             return Ok(new { message = result.Message });
+        }
+
+        // PATCH: api/tasks/{id}/risk
+        [HttpPatch("{id}/risk")]
+        [Authorize(Roles = "Admin,Manager")] // Chỉ Manager/Admin mới có quyền duyệt
+        public async Task<IActionResult> ApproveRisk(int id, [FromBody] bool isRiskApproved)
+        {
+            // Lúc này biến _context đã có sẵn để gọi!
+            var task = await _context.Tasks.FindAsync(id);
+            if (task == null) return NotFound("Không tìm thấy Task.");
+
+            var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value!);
+
+            task.RiskFlag = isRiskApproved;
+            task.UpdatedBy = userId; // Ghi vết người duyệt để lưu vào Audit Log
+
+            await _context.SaveChangesAsync();
+
+            var msg = isRiskApproved ? "Đã duyệt cờ Rủi ro (miễn phạt trễ hạn)." : "Đã gỡ cờ Rủi ro.";
+            return Ok(new { message = msg });
         }
     }
 }
