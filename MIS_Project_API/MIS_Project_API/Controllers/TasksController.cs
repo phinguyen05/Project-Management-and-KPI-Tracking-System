@@ -1,16 +1,18 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using MIS_Project_API.DTOs.Task;
 using MIS_Project_API.Interfaces;
-using MIS_Project_API.Models; // ĐÃ THÊM: Để gọi được DbContext và Models
 
 namespace MIS_Project_API.Controllers
 {
-    // Dinh nghia lop model ngay trong controller de khong lam rac thu muc DTO
     public class UpdateTaskStatusRequest
     {
         public string Status { get; set; } = null!;
+    }
+
+    public class RiskApprovalRequest
+    {
+        public bool Approved { get; set; }
     }
 
     [Route("api/[controller]")]
@@ -19,13 +21,10 @@ namespace MIS_Project_API.Controllers
     public class TasksController : ControllerBase
     {
         private readonly ITaskService _taskService;
-        private readonly MisProjectManagementContext _context; // [ĐÃ FIX]: Khai báo thêm biến _context
 
-        // [ĐÃ FIX]: Tiêm (Inject) MisProjectManagementContext vào Constructor
-        public TasksController(ITaskService taskService, MisProjectManagementContext context)
+        public TasksController(ITaskService taskService)
         {
             _taskService = taskService;
-            _context = context;
         }
 
         [HttpGet("project/{projectId}/wbs")]
@@ -55,7 +54,6 @@ namespace MIS_Project_API.Controllers
         [HttpPatch("{id}/status")]
         public async Task<ActionResult> UpdateStatus(int id, [FromBody] UpdateTaskStatusRequest updateDto)
         {
-            // Lay thong tin user dang call API
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             int.TryParse(userIdClaim, out int currentUserId);
             bool isManager = User.IsInRole("Manager") || User.IsInRole("Admin");
@@ -70,24 +68,13 @@ namespace MIS_Project_API.Controllers
             return Ok(new { message = result.Message });
         }
 
-        // PATCH: api/tasks/{id}/risk
-        [HttpPatch("{id}/risk")]
-        [Authorize(Roles = "Admin,Manager")] // Chỉ Manager/Admin mới có quyền duyệt
-        public async Task<IActionResult> ApproveRisk(int id, [FromBody] bool isRiskApproved)
+        [HttpPatch("{id}/risk-approval")]
+        [Authorize(Roles = "Manager,Admin")]
+        public async Task<ActionResult> SetRiskApproval(int id, [FromBody] RiskApprovalRequest request)
         {
-            // Lúc này biến _context đã có sẵn để gọi!
-            var task = await _context.Tasks.FindAsync(id);
-            if (task == null) return NotFound("Không tìm thấy Task.");
-
-            var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value!);
-
-            task.RiskFlag = isRiskApproved;
-            task.UpdatedBy = userId; // Ghi vết người duyệt để lưu vào Audit Log
-
-            await _context.SaveChangesAsync();
-
-            var msg = isRiskApproved ? "Đã duyệt cờ Rủi ro (miễn phạt trễ hạn)." : "Đã gỡ cờ Rủi ro.";
-            return Ok(new { message = msg });
+            var result = await _taskService.SetRiskApprovalAsync(id, request.Approved);
+            if (!result.Success) return BadRequest(result.Message);
+            return Ok(new { message = result.Message });
         }
     }
 }

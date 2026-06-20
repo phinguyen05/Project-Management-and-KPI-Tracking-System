@@ -15,7 +15,6 @@ namespace MIS_Project_API.Services
             _context = context;
         }
 
-        // 1. THUẬT TOÁN WBS
         public async Task<IEnumerable<TaskDto>> GetProjectTasksWbsAsync(int projectId)
         {
             var allTasks = await _context.Tasks
@@ -58,7 +57,6 @@ namespace MIS_Project_API.Services
             return rootTasks;
         }
 
-        // 2. TẠO TASK MỚI
         public async Task<TaskDto> CreateTaskAsync(CreateTaskDto createDto)
         {
             var taskModel = new DbTask
@@ -97,7 +95,6 @@ namespace MIS_Project_API.Services
             };
         }
 
-        // 3. CẬP NHẬT NGÀY & KÍCH HOẠT HIỆU ỨNG DOMINO
         public async Task<bool> UpdateTaskDatesAndShiftChildrenAsync(int taskId, UpdateTaskDateDto updateDto)
         {
             var rootTask = await _context.Tasks.FindAsync(taskId);
@@ -145,26 +142,22 @@ namespace MIS_Project_API.Services
             }
         }
 
-        // 4. CẬP NHẬT TRẠNG THÁI TASK & KIỂM TRA LOG-TIME
         public async Task<(bool Success, string Message)> UpdateTaskStatusAsync(int taskId, string newStatus, int currentUserId, bool isManager)
         {
             var task = await _context.Tasks.FindAsync(taskId);
             if (task == null) return (false, "Không tìm thấy Task.");
 
-            // Kiem tra quyen: Chi Assignee hoac Manager/Admin moi duoc sua
             if (task.AssigneeId != currentUserId && !isManager)
             {
                 return (false, "Bạn không có quyền cập nhật trạng thái của Task này.");
             }
 
-            // Da bo "Risk" ra khoi day
             var validStatuses = new[] { "To_Do", "Doing", "Done" };
             if (!validStatuses.Contains(newStatus))
                 return (false, "Trạng thái không hợp lệ. Chỉ chấp nhận To_Do, Doing, Done.");
 
             if (newStatus == "Done")
             {
-                // FIX LỖI 4 TẠI ĐÂY LUÔN: Done thì log-time phải là Approved
                 bool hasApprovedLogTime = await _context.LogTimes.AnyAsync(lt => lt.TaskId == taskId && lt.Status == "Approved");
                 if (!hasApprovedLogTime)
                 {
@@ -180,6 +173,22 @@ namespace MIS_Project_API.Services
             task.Status = newStatus;
             await _context.SaveChangesAsync();
             return (true, "Cập nhật trạng thái thành công.");
+        }
+
+        public async Task<(bool Success, string Message)> SetRiskApprovalAsync(int taskId, bool approved)
+        {
+            var task = await _context.Tasks.FindAsync(taskId);
+            if (task == null) return (false, "Không tìm thấy Task.");
+
+            if (!(task.RiskFlag ?? false))
+                return (false, "Task này chưa được Nhân sự gắn cờ Rủi ro, không có gì để duyệt.");
+
+            task.RiskApprovedByManager = approved;
+            await _context.SaveChangesAsync();
+
+            return (true, approved
+                ? "Đã duyệt miễn trừ hệ số phạt cho Task này."
+                : "Đã từ chối miễn trừ hệ số phạt — Task vẫn bị tính phạt nếu trễ hạn.");
         }
     }
 }

@@ -52,7 +52,7 @@ namespace MIS_Project_API.Services
                 double est = task.EstimatedTime ?? 0;
 
                 // Nếu task không có deadline hoặc được cắm cờ Rủi ro (đã duyệt) -> Miễn phạt
-                if (!task.Deadline.HasValue || (task.RiskFlag ?? false))
+                if (!task.Deadline.HasValue || ((task.RiskFlag ?? false) && (task.RiskApprovedByManager ?? false)))
                 {
                     earnedEstTime += est;
                     continue;
@@ -185,3 +185,4 @@ namespace MIS_Project_API.Services
         }
     }
 }
+

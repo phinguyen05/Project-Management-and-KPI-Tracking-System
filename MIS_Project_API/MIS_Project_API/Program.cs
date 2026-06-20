@@ -103,7 +103,9 @@ app.UseHangfireDashboard();
 
 // Dang ky Cron Job chay hang ngay
 RecurringJob.AddOrUpdate<IBackgroundJobService>("CheckOverdueTasks", service => service.CheckAndAlertOverdueTasksAsync(), Cron.Daily);
+RecurringJob.AddOrUpdate<IBackgroundJobService>("AutoApprovePendingLogTimes", service => service.AutoApprovePendingLogTimesAsync(), Cron.Daily);
 
 app.Run();
+
 
 
