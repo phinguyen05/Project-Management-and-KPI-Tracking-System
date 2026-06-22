@@ -1,10 +1,38 @@
-﻿import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, Tag, Modal, Button, message, Space, Form, InputNumber, DatePicker, Input, Avatar, List, Divider } from 'antd';
-import { ClockCircleOutlined, RightOutlined, CheckOutlined, SendOutlined, MessageOutlined, CalendarOutlined, UserOutlined } from '@ant-design/icons';
+﻿import React, { useMemo, useState, useEffect } from 'react';
+import {
+    Row,
+    Col,
+    Card,
+    Tag,
+    Modal,
+    Button,
+    message,
+    Space,
+    Form,
+    InputNumber,
+    DatePicker,
+    Input,
+    Avatar,
+    List,
+    Divider,
+    Select,
+} from 'antd';
+import {
+    ClockCircleOutlined,
+    RightOutlined,
+    CheckOutlined,
+    SendOutlined,
+    MessageOutlined,
+    CalendarOutlined,
+    UserOutlined,
+} from '@ant-design/icons';
 import api from '../../services/api';
 import dayjs from 'dayjs';
 
 export default function KanbanBoard() {
+    const [projects, setProjects] = useState([]);
+    const [selectedProjectId, setSelectedProjectId] = useState(null);
+
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isTaskModalVisible, setIsTaskModalVisible] = useState(false);
@@ -16,11 +44,28 @@ export default function KanbanBoard() {
     const [logForm] = Form.useForm();
     const [extendForm] = Form.useForm();
 
-    const fetchTasks = async () => {
+    const fetchProjectsForEmployee = async () => {
+        // GET /projects trong backend đã lọc theo user theo role
+        try {
+            const res = await api.get('/projects');
+            const list = Array.isArray(res?.data) ? res.data : [];
+            setProjects(list);
+
+            const firstId = list?.[0]?.projectId ?? list?.[0]?.id;
+            setSelectedProjectId(firstId ?? null);
+        } catch (e) {
+            message.error('Lỗi khi tải danh sách dự án!');
+            setProjects([]);
+            setSelectedProjectId(null);
+        }
+    };
+
+    const fetchTasks = async (projectId) => {
+        if (!projectId) return;
         setLoading(true);
         try {
-            const response = await api.get('/tasks/project/1/wbs');
-            // Cấu trúc phẳng hóa các task từ cây để hiển thị Kanban
+            const response = await api.get(`/tasks/project/${projectId}/wbs`);
+
             const flattened = [];
             const flatten = (items) => {
                 items.forEach(item => {
@@ -30,8 +75,16 @@ export default function KanbanBoard() {
                     }
                 });
             };
+
             flatten(response.data);
-            setTasks(flattened);
+
+            // Chỉ lấy Leaf tasks (Task con, không có task nào khác dùng nó làm parent_task_id)
+            const leafTasks = flattened.filter(
+                (t) => !flattened.some((child) => child?.parentTaskId === t.taskId)
+            );
+
+            setTasks(leafTasks);
+
         } catch (error) {
             message.error('Lỗi khi tải dữ liệu Kanban!');
         } finally {
@@ -48,17 +101,36 @@ export default function KanbanBoard() {
     };
 
     useEffect(() => {
-        fetchTasks();
+        const init = async () => {
+            await fetchProjectsForEmployee();
+        };
+        init();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    useEffect(() => {
+        if (selectedProjectId) {
+            fetchTasks(selectedProjectId);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedProjectId]);
+
+
     const updateTaskStatus = async (taskId, newStatus) => {
+        // 1. Cập nhật State trực tiếp trên UI ngay lập tức (Không cần F5)
+        setTasks(prevTasks => prevTasks.map(task => 
+            task.taskId === taskId ? { ...task, status: newStatus } : task
+        ));
+        setIsTaskModalVisible(false);
+
         try {
+            // 2. Gửi API xuống Backend
             await api.patch(`/tasks/${taskId}/status`, { status: newStatus });
             message.success('Đã chuyển trạng thái Task!');
-            fetchTasks();
-            setIsTaskModalVisible(false);
         } catch (error) {
             message.error(error.response?.data || 'Lỗi khi cập nhật trạng thái!');
+            // Rollback nếu lỗi
+            fetchTasks(selectedProjectId);
         }
     };
 
@@ -126,6 +198,10 @@ export default function KanbanBoard() {
 
     const renderColumn = (title, statusKey, color) => {
         const colTasks = tasks.filter(t => t.status === statusKey);
+
+        // Backend status enum chuẩn: To_Do, Doing, Done
+        // Kanban đang so theo đúng chuỗi này.
+
         
         return (
             <Col span={8}>
@@ -159,7 +235,22 @@ export default function KanbanBoard() {
 
     return (
         <div>
-            <h2 style={{ marginBottom: 24 }}>Bảng Công Việc (Kanban)</h2>
+            <h2 style={{ marginBottom: 16 }}>Bảng Công Việc (Kanban)</h2>
+            <div style={{ marginBottom: 24, display: 'flex', gap: 12, alignItems: 'center' }}>
+                <span style={{ fontWeight: 600 }}>Chọn dự án:</span>
+                <Select
+                    style={{ minWidth: 320 }}
+                    placeholder="Chọn dự án"
+                    loading={loading && projects.length === 0}
+                    value={selectedProjectId ?? undefined}
+                    onChange={(val) => setSelectedProjectId(val)}
+                    options={(projects || []).map((p) => ({
+                        value: p.projectId ?? p.id,
+                        label: p.name ?? p.projectName ?? 'Project',
+                    }))}
+                    disabled={!projects || projects.length === 0}
+                />
+            </div>
             <Row gutter={16}>
                 {renderColumn('To-Do (Cần làm)', 'To_Do', '#faad14')}
                 {renderColumn('Doing (Đang làm)', 'Doing', '#1890ff')}

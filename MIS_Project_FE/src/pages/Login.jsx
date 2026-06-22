@@ -45,19 +45,43 @@ export default function Login() {
                 username: values.username,
                 password: values.password
             });
-            
-            const token = response.data.token;
+
+            const token = response?.data?.token;
+            if (!token) {
+                throw new Error('API không trả về token.');
+            }
+
             localStorage.setItem('token', token);
-            
+
             const decoded = jwtDecode(token);
-            const role = decoded.role || decoded['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
+            const role =
+                decoded?.role ||
+                decoded?.['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ||
+                decoded?.Role;
+
+            if (!role) {
+                throw new Error('Không đọc được role từ token.');
+            }
             localStorage.setItem('role', role);
 
             message.success('Đăng nhập thành công!');
             redirectByRole(role);
 
         } catch (error) {
-            message.error(error.response?.data || 'Sai tên đăng nhập hoặc mật khẩu!');
+            const status = error?.response?.status;
+            const data = error?.response?.data;
+            console.error('[Login error]', { status, data, error });
+
+            if (typeof data === 'string') {
+                message.error(data);
+            } else if (data?.message) {
+                message.error(data.message);
+            } else if (status === 401 || status === 403) {
+                message.error('Đăng nhập thất bại (Sai tài khoản/mật khẩu hoặc tài khoản bị khóa).');
+            } else {
+                message.error('Không thể đăng nhập. Vui lòng kiểm tra API/Network.');
+            }
+
         } finally {
             setLoading(false);
         }

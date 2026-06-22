@@ -6,8 +6,10 @@ import UserManagement from './pages/admin/UserManagement';
 import DepartmentManagement from './pages/admin/DepartmentManagement';
 import SystemSettings from './pages/admin/SystemSettings';
 import AuditLogPage from './pages/admin/AuditLogPage';
+import ProjectList from './pages/manager/ProjectList';
 import ProjectManagement from './pages/manager/ProjectManagement';
 import Approvals from './pages/manager/Approvals';
+
 import KanbanBoard from './pages/employee/KanbanBoard';
 import EmployeeDashboard from './pages/employee/EmployeeDashboard';
 import ManagerDashboard from './pages/manager/ManagerDashboard';
@@ -96,6 +98,14 @@ function App() {
         <Route path="/manager/kpi-review" element={<MainLayout><KPIReview /></MainLayout>} />
         <Route 
           path="/manager/projects" 
+          element={
+            <RequireAuth allowedRoles={['Manager']}>
+              <MainLayout><ProjectList /></MainLayout>
+            </RequireAuth>
+          } 
+        />
+        <Route 
+          path="/manager/projects/:project_id/tasks" 
           element={
             <RequireAuth allowedRoles={['Manager']}>
               <MainLayout><ProjectManagement /></MainLayout>

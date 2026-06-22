@@ -37,12 +37,8 @@ export default function KPIReview() {
             const results = await Promise.all(kpiPromises);
             setKpiData(results);
         } catch (error) {
-            message.error('Lỗi khi lấy dữ liệu KPI từ Backend! Chuyển sang dữ liệu mô phỏng.');
-            setKpiData([
-                { userId: 1, userName: 'Nguyễn Văn A (Dev A)', timeliness: 90, efficiency: 110, capacity: 120, managerScore: 95, status: 'Draft' },
-                { userId: 2, userName: 'Lê Thị B (Dev B)', timeliness: 80, efficiency: 70, capacity: 90, managerScore: 85, status: 'Draft' },
-                { userId: 3, userName: 'Trần Văn C (Tester C)', timeliness: 100, efficiency: 100, capacity: 100, managerScore: 100, status: 'Closed' }
-            ]);
+            message.error('Lỗi khi lấy dữ liệu KPI từ Backend!');
+            setKpiData([]);
         } finally {
             setLoading(false);
         }
@@ -67,16 +63,37 @@ export default function KPIReview() {
     };
 
     const handleFinalize = async (record) => {
+        // 1. Lạc quan UI: Cập nhật state lập tức để nút mờ đi ngay khi bấm
+        setKpiData((prev) =>
+            prev.map(item =>
+                item.userId === record.userId
+                    ? { ...item, status: 'Closed' }
+                    : item
+            )
+        );
+
         try {
             await api.post(`/kpis/finalize/${record.userId}?month=6&year=2026`, {
                 managerScore: record.managerScore,
-                note: "Đánh giá cuối kỳ"
+                note: "Đánh giá cuối kỳ",
             });
             message.success(`Đã chốt KPI cho ${record.userName}!`);
             fetchKpiData();
         } catch (error) {
-            message.success(`Đã chốt KPI thành công cho ${record.userName} (Simulated)!`);
-            setKpiData(kpiData.map(i => i.userId === record.userId ? {...i, status: 'Closed'} : i));
+            // Nếu API lỗi (401/500/khác) => bắt buộc show message, không để UI im lặng
+            const status = error?.response?.status;
+            if (status === 401) {
+                message.error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!');
+            } else {
+                message.error(
+                    error?.response?.data?.message || `Chốt KPI thất bại cho ${record.userName}!`
+                );
+            }
+
+            // Nếu API lỗi, hoàn tác state để người dùng có thể bấm lại
+            setKpiData((prev) => prev.map(i =>
+                i.userId === record.userId ? { ...i, status: 'Draft' } : i
+            ));
         }
     };
 
@@ -154,6 +171,7 @@ export default function KPIReview() {
                     icon={<CheckOutlined />} 
                     onClick={() => handleFinalize(r)}
                     disabled={r.status === 'Closed'}
+                    style={r.status === 'Closed' ? { background: '#d9d9d9', borderColor: '#d9d9d9' } : undefined}
                 >
                     {r.status === 'Closed' ? 'Đã chốt' : 'Chốt & Duyệt'}
                 </Button>

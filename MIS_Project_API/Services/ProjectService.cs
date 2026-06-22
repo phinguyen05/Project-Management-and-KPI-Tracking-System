@@ -114,6 +114,83 @@ namespace MIS_Project_API.Services
             var projectModel = await _context.Projects.FirstOrDefaultAsync(p => p.ProjectId == id);
             if (projectModel == null) return false;
 
+            // Xóa toàn bộ Task thuộc Project trước để tránh ràng buộc khóa ngoại.
+            var taskIds = await _context.Tasks
+                .Where(t => t.ProjectId == id)
+                .Select(t => t.TaskId)
+                .ToListAsync();
+
+            // Duyệt theo từng task root để cascade đúng quan hệ cây.
+            // (DeleteTaskCascadeAsync sẽ tự lấy toàn bộ sub-task.)
+            foreach (var taskId in taskIds)
+            {
+                // Nếu đã xóa do cascade từ task khác thì bỏ qua.
+                var exists = await _context.Tasks.AnyAsync(t => t.TaskId == taskId);
+                if (!exists) continue;
+
+                // Cascade delete trực tiếp theo cây và dữ liệu liên quan.
+                // Lưu ý: sử dụng DbContext để tránh phụ thuộc ITaskService.
+
+                var idsToDelete = new List<int>();
+                var queue = new Queue<int>();
+                queue.Enqueue(taskId);
+
+                while (queue.Count > 0)
+                {
+                    var currentId = queue.Dequeue();
+                    if (idsToDelete.Contains(currentId)) continue;
+                    idsToDelete.Add(currentId);
+
+                    var childrenIds = await _context.Tasks
+                        .Where(t => t.ParentTaskId == currentId)
+                        .Select(t => t.TaskId)
+                        .ToListAsync();
+
+                    foreach (var childId in childrenIds)
+                    {
+                        if (!idsToDelete.Contains(childId)) queue.Enqueue(childId);
+                    }
+                }
+
+                var depsToDelete = await _context.TaskDependencies
+                    .Where(d => idsToDelete.Contains(d.PredecessorTaskId) || idsToDelete.Contains(d.SuccessorTaskId))
+                    .ToListAsync();
+                if (depsToDelete.Count > 0) _context.TaskDependencies.RemoveRange(depsToDelete);
+
+                var logTimesToDelete = await _context.LogTimes
+                    .Where(lt => idsToDelete.Contains(lt.TaskId))
+                    .ToListAsync();
+                if (logTimesToDelete.Count > 0) _context.LogTimes.RemoveRange(logTimesToDelete);
+
+                var commentsToDelete = await _context.Comments
+                    .Where(c => idsToDelete.Contains(c.TaskId))
+                    .ToListAsync();
+                if (commentsToDelete.Count > 0) _context.Comments.RemoveRange(commentsToDelete);
+
+                var extensionRequestsToDelete = await _context.ExtensionRequests
+                    .Where(er => idsToDelete.Contains(er.TaskId))
+                    .ToListAsync();
+                if (extensionRequestsToDelete.Count > 0) _context.ExtensionRequests.RemoveRange(extensionRequestsToDelete);
+
+                var tasksToDelete = await _context.Tasks
+                    .Where(t => idsToDelete.Contains(t.TaskId))
+                    .ToListAsync();
+                if (tasksToDelete.Count > 0) _context.Tasks.RemoveRange(tasksToDelete);
+
+                await _context.SaveChangesAsync();
+            }
+
+            // Xóa tài liệu dự án
+            var projectDocs = await _context.ProjectDocuments.Where(d => d.ProjectId == id).ToListAsync();
+            if (projectDocs.Count > 0) _context.ProjectDocuments.RemoveRange(projectDocs);
+
+            // Xóa bảng trung gian Project_Client (many-to-many) để tránh xung đột khóa ngoại
+            // Entity này không có DbSet trong code, nên dùng FromSql để tác động trực tiếp.
+            await _context.Database.ExecuteSqlRawAsync(
+                "DELETE FROM Project_Client WHERE project_id = {0}",
+                id
+            );
+
             _context.Projects.Remove(projectModel);
             await _context.SaveChangesAsync();
             return true;

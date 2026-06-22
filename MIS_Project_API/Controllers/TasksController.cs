@@ -86,5 +86,14 @@ namespace MIS_Project_API.Controllers
             if (!result.Success) return BadRequest(result.Message);
             return Ok(new { message = result.Message });
         }
+
+        [HttpDelete("{id}")]
+        [Authorize(Roles = "Manager,Admin")]
+        public async Task<ActionResult> Delete(int id)
+        {
+            var result = await _taskService.DeleteTaskCascadeAsync(id);
+            if (!result.Success) return NotFound(result.Message);
+            return NoContent();
+        }
     }
 }

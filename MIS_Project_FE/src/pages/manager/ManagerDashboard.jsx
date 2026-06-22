@@ -1,91 +1,165 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, List, Tag, Typography, Progress, Button, Space, Badge, Tooltip } from 'antd';
+﻿import React, { useState, useEffect } from 'react';
+import { Card, Row, Col, List, Tag, Typography, Progress, Button, Space, Badge, Tooltip, Alert } from 'antd';
 import { WarningOutlined, UserOutlined, ProjectOutlined, CalendarOutlined, FireOutlined } from '@ant-design/icons';
 import api from '../../services/api';
 
 const { Title, Text } = Typography;
 
 export default function ManagerDashboard() {
-    const [loading, setLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState(null);
     const [overloadEmployees, setOverloadEmployees] = useState([]);
     const [riskTasks, setRiskTasks] = useState([]);
     const [projectsOverview, setProjectsOverview] = useState([]);
 
-    // Dữ liệu cho Gantt Chart & Heatmap
-    const ganttTasks = [
-        { id: 1, name: 'Setup DB & Infrastructure', start: '01/06', end: '10/06', progress: 100, dependency: 'None' },
-        { id: 2, name: 'Fix lỗi UI bảng Gantt', start: '11/06', end: '20/06', progress: 75, dependency: 'Task 1 (FS)' },
-        { id: 3, name: 'Viết tài liệu API & Test', start: '21/06', end: '28/06', progress: 10, dependency: 'Task 2 (FS)' }
-    ];
 
-    const heatmapData = [
-        { name: 'Dev A', mon: 120, tue: 115, wed: 110, thu: 95, fri: 100, status: 'Overload' },
-        { name: 'Dev B', mon: 90, tue: 100, wed: 95, thu: 100, fri: 90, status: 'Normal' },
-        { name: 'Tester C', mon: 115, tue: 110, wed: 115, thu: 105, fri: 100, status: 'Overload' },
-        { name: 'Designer D', mon: 80, tue: 85, wed: 90, thu: 80, fri: 75, status: 'Normal' }
-    ];
+    const [ganttTasks, setGanttTasks] = useState([]);
+    const [heatmapData, setHeatmapData] = useState([]);
 
-    useEffect(() => {
+useEffect(() => {
         const fetchDashboardData = async () => {
-            setLoading(true);
+            setIsLoading(true);
+            setError(null);
             try {
-                const [employeesRes, tasksRes, projectsRes] = await Promise.all([
-                    api.get("/reports/overload-employees"),
-                    api.get("/reports/risk-tasks"),
-                    api.get("/projects/overview")
+                // Làm dynamic theo backend hiện có.
+                // Nếu backend chưa có endpoint thống kê Gantt/Heatmap riêng, ta để rỗng và hiển thị text.
+
+                // Lấy WBS (tạm dùng cho mục “Task có nguy cơ trễ hạn”). Backend sẽ tự lọc theo user/role.
+                const projectsRes = await api.get("/projects");
+
+                const projects = Array.isArray(projectsRes?.data) ? projectsRes.data : [];
+                setProjectsOverview(
+                    projects.map((p, idx) => ({
+                        id: p.projectId ?? p.id ?? idx + 1,
+                        name: p.name ?? p.projectName ?? 'Project',
+                        // Backend hiện chưa có progress field chuẩn => tính từ WBS (Leaf tasks)
+                        progress: 0,
+                    }))
+                );
+
+                // Tính tiến độ dự án theo công thức:
+                // (Số lượng Task Con có status Done / Tổng số Task Con Leaf) * 100
+                // + Lọc leaf task: task không ai khác dùng làm parentTaskId.
+                //
+                // NOTE: Endpoint WBS hiện tại: GET /tasks/project/{projectId}/wbs
+                // Trong thực tế API trả về cây subTasks.
+                const computeProjectProgress = async (projectList) => {
+                    const results = await Promise.all(
+                        projectList.map(async (p) => {
+                            try {
+                                const wbsRes = await api.get(`/tasks/project/${p.id}/wbs`);
+                                const tree = Array.isArray(wbsRes?.data) ? wbsRes.data : [];
+
+                                const flat = [];
+                                const flatten = (items) => {
+                                    items.forEach((item) => {
+                                        if (item) flat.push(item);
+                                        const subs = Array.isArray(item?.subTasks) ? item.subTasks : [];
+                                        if (subs.length > 0) flatten(subs);
+                                    });
+                                };
+                                flatten(tree);
+
+                                const leaf = flat.filter(
+                                    (t) => !flat.some((candidate) => candidate?.parentTaskId === t.taskId)
+                                );
+
+                                const totalLeaf = leaf.length;
+                                const doneLeaf = leaf.filter((t) => t?.status === 'Done').length;
+                                const progress = totalLeaf > 0 ? (doneLeaf / totalLeaf) * 100 : 0;
+
+                                return { ...p, progress: Math.round(progress * 10) / 10 };
+                            } catch {
+                                return { ...p, progress: 0 };
+                            }
+                        })
+                    );
+
+                    return results;
+                };
+
+                const projectsWithProgress = await computeProjectProgress(
+                    projects.map((p, idx) => ({
+                        id: p.projectId ?? p.id ?? idx + 1,
+                        name: p.name ?? p.projectName ?? 'Project',
+                        progress: 0,
+                    }))
+                );
+
+                setProjectsOverview(projectsWithProgress);
+
+                setOverloadEmployees([]);
+                setRiskTasks([]);
+
+                // Gantt & Heatmap chưa có endpoint thống kê riêng => để rỗng
+                // --- Gọi API thật cho Gantt & Heatmap ---
+                // Gantt: cần projectId, ta chọn project đầu tiên (nếu muốn đa dự án có thể mở rộng)
+                const firstProjectId = (projectsRes?.data?.[0]?.projectId ?? projectsRes?.data?.[0]?.id) || (projects?.[0]?.projectId ?? projects?.[0]?.id);
+
+                const [ganttRes, heatmapRes] = await Promise.all([
+                    firstProjectId ? api.get(`/dashboard/gantt/${firstProjectId}`) : Promise.resolve({ data: [] }),
+                    api.get('/dashboard/heatmap').catch(() => ({ data: [] })),
                 ]);
-                setOverloadEmployees(employeesRes.data || []);
-                setRiskTasks(tasksRes.data || []);
-                setProjectsOverview(projectsRes.data || []);
-            } catch (error) {
-                // Fallback mock data khớp 100% với tài liệu và PlantUML
-                setOverloadEmployees([
-                    { id: 1, name: 'Dev A', overload_percentage: 120, action_needed: 'Cần san việc' },
-                    { id: 2, name: 'Tester C', overload_percentage: 115, action_needed: 'Quá tải' }
-                ]);
-                setRiskTasks([
-                    { id: 1, name: 'Fix UI bảng Gantt', deadline: 'Mai (22/06)', assignee: 'Dev B' },
-                    { id: 2, name: 'Setup DB', deadline: 'Đã trễ 1 ngày', assignee: 'Dev A' }
-                ]);
-                setProjectsOverview([
-                    { id: 1, name: 'Dự án MIS', progress: 80 },
-                    { id: 2, name: 'Dự án CRM', progress: 30 }
-                ]);
+
+                setGanttTasks(Array.isArray(ganttRes?.data) ? ganttRes.data : []);
+                setHeatmapData(Array.isArray(heatmapRes?.data) ? heatmapRes.data : []);
+
+            } catch (err) {
+                setError(err);
+                setOverloadEmployees([]);
+                setRiskTasks([]);
+                setProjectsOverview([]);
+                setGanttTasks([]);
+                setHeatmapData([]);
             } finally {
-                setLoading(false);
+                setIsLoading(false);
             }
         };
         fetchDashboardData();
     }, []);
 
+
+
     const getHeatmapColor = (value) => {
-        if (value >= 115) return '#ff4d4f'; // Overload đỏ rực
-        if (value >= 110) return '#ff7875'; // Overload đỏ nhạt
-        if (value >= 100) return '#ffc069'; // Sát nút màu cam
-        return '#bae7ff'; // Bình thường màu xanh nhẹ
+        const v = Number(value);
+        if (Number.isNaN(v)) return '#bae7ff';
+        if (v > 110) return '#ff4d4f'; // Đỏ
+        if (v >= 100 && v <= 110) return '#ffc069'; // Vàng
+        return '#bae7ff'; // Xanh
     };
 
     return (
-        <div style={{ padding: '10px' }}>
-            <Title level={2} style={{ marginBottom: 24 }}>Manager Dashboard & Hệ thống MIS</Title>
+        <div>
+            <Title level={3} style={{ marginBottom: 24 }}>Manager Dashboard</Title>
 
-            <Row gutter={[24, 24]} style={{ marginBottom: 24 }}>
-                {/* 1. Cảnh báo rủi ro & Overload */}
+            {isLoading && (
+                <Alert message="Loading..." type="info" showIcon style={{ marginBottom: 16 }} />
+            )}
+            {!isLoading && error && (
+                <Alert
+                    message="Không tải được dữ liệu dashboard"
+                    description={typeof error?.message === 'string' ? error.message : 'Vui lòng thử lại sau.'}
+                    type="error"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                />
+            )}
+
+            <Row gutter={16} style={{ marginBottom: 24 }}>
+
                 <Col xs={24} lg={12}>
-                    <Card title={<strong><WarningOutlined style={{ color: '#faad14' }} /> Cảnh báo Rủi ro & Tải lượng nhân sự</strong>} loading={loading} style={{ borderRadius: 8, height: '100%' }}>
-                        <Row gutter={[16, 16]}>
+                    <Card title={<strong><WarningOutlined /> Cảnh báo Rủi ro & Quá tải</strong>} loading={isLoading} style={{ borderRadius: 8, height: '100%' }}>
+                        <Row gutter={16}>
                             <Col span={12}>
-                                <Title level={5} style={{ color: '#ff4d4f' }}><FireOutlined /> Nhân sự Overload {"(>110%)"}</Title>
+                                <Title level={5}><FireOutlined /> Nhân sự quá tải</Title>
                                 <List
                                     dataSource={overloadEmployees}
                                     renderItem={(item) => (
                                         <List.Item>
                                             <div style={{ width: '100%' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                                    <Text strong>{item.name}</Text>
-                                                    <Tag color="volcano">{item.overload_percentage}%</Tag>
-                                                </div>
-                                                <Text type="danger" style={{ fontSize: '12px' }}>⚠️ {item.action_needed} khẩn cấp</Text>
+                                                <Text strong style={{ display: 'block' }}>{item.name}</Text>
+                                                <Tag color="red">{item.overload_percentage}%</Tag>
+                                                <Text type="danger" style={{ fontSize: '12px' }}> {item.action_needed} khẩn cấp</Text>
                                             </div>
                                         </List.Item>
                                     )}
@@ -93,28 +167,30 @@ export default function ManagerDashboard() {
                             </Col>
                             <Col span={12}>
                                 <Title level={5}>Task có nguy cơ trễ hạn</Title>
-                                <List
-                                    dataSource={riskTasks}
-                                    renderItem={(item) => (
-                                        <List.Item>
-                                            <div style={{ width: '100%' }}>
-                                                <Text strong style={{ display: 'block' }}>{item.name}</Text>
-                                                <Space style={{ marginTop: 4 }}>
-                                                    <Tag color="orange">{item.deadline}</Tag>
-                                                    <Text type="secondary" style={{ fontSize: '12px' }}>({item.assignee})</Text>
-                                                </Space>
-                                            </div>
-                                        </List.Item>
-                                    )}
-                                />
+                                {Array.isArray(riskTasks) && riskTasks.length > 0 ? (
+                                    <List
+                                        dataSource={riskTasks}
+                                        renderItem={(item) => (
+                                            <List.Item>
+                                                <div style={{ width: '100%' }}>
+                                                    <Text strong style={{ display: 'block' }}>{item.name}</Text>
+                                                    <Space style={{ marginTop: 4 }}>
+                                                        <Tag color="orange">{item.deadline}</Tag>
+                                                        <Text type="secondary" style={{ fontSize: '12px' }}>({item.assignee})</Text>
+                                                    </Space>
+                                                </div>
+                                            </List.Item>
+                                        )}
+                                    />
+                                ) : null}
+
                             </Col>
                         </Row>
                     </Card>
                 </Col>
 
-                {/* 2. Tiến độ dự án tổng thể */}
                 <Col xs={24} lg={12}>
-                    <Card title={<strong><ProjectOutlined /> Tiến độ dự án tổng thể</strong>} loading={loading} style={{ borderRadius: 8, height: '100%' }}>
+                    <Card title={<strong><ProjectOutlined /> Tiến độ dự án tổng thể</strong>} loading={isLoading} style={{ borderRadius: 8, height: '100%' }}>
                         <Title level={5} style={{ color: '#555' }}><CalendarOutlined /> Kỳ đánh giá: Tháng 06/2026</Title>
                         <List
                             dataSource={projectsOverview}
@@ -124,10 +200,10 @@ export default function ManagerDashboard() {
                                         <Text strong>{item.name}</Text>
                                         <Text>{item.progress}%</Text>
                                     </div>
-                                    <Progress 
-                                        percent={item.progress} 
-                                        status="active" 
-                                        showInfo={false} 
+                                    <Progress
+                                        percent={item.progress}
+                                        status="active"
+                                        showInfo={false}
                                         strokeColor={item.progress < 50 ? '#ff4d4f' : (item.progress < 80 ? '#faad14' : '#52c41a')}
                                     />
                                 </List.Item>
@@ -137,56 +213,55 @@ export default function ManagerDashboard() {
                 </Col>
             </Row>
 
-            {/* 3. Sơ đồ Gantt tiến độ công việc */}
-            <Card title={<strong>📅 Sơ đồ Gantt tiến độ dự án (Dependencies: Finish-to-Start)</strong>} style={{ marginBottom: 24, borderRadius: 8 }}>
+            <Card title={<strong>Sơ đồ Gantt tiến độ dự án (Dependencies: Finish-to-Start)</strong>} style={{ marginBottom: 24, borderRadius: 8 }}>
                 <div style={{ overflowX: 'auto', padding: '10px 0' }}>
                     <div style={{ minWidth: 600 }}>
-                        {/* Header của sơ đồ */}
                         <Row style={{ background: '#f5f5f5', padding: '8px 16px', fontWeight: 'bold', borderBottom: '1px solid #e8e8e8' }}>
                             <Col span={8}>Tên gói công việc (Task)</Col>
-                            <Col span={4}>Thời hạn</Col>
+                            <Col span={4}>Thời gian</Col>
                             <Col span={4}>Phụ thuộc</Col>
-                            <Col span={8} style={{ textAlign: 'center' }}>Dòng thời gian (Timeline Tháng 6)</Col>
+                            <Col span={8}>Tiến độ</Col>
                         </Row>
+                        {Array.isArray(ganttTasks) && ganttTasks.length > 0 ? (
+                            ganttTasks.map((task) => (
 
-                        {/* Danh sách Task lồng thanh bar */}
-                        {ganttTasks.map(task => (
-                            <Row key={task.id} style={{ padding: '14px 16px', borderBottom: '1px solid #f0f0f0', alignItems: 'center' }}>
-                                <Col span={8} style={{ fontWeight: '500' }}>{task.name}</Col>
-                                <Col span={4}><Tag color="blue">{task.start} - {task.end}</Tag></Col>
-                                <Col span={4}><Text type="secondary">{task.dependency}</Text></Col>
-                                <Col span={8}>
-                                    {/* Thanh Bar Gantt mô phỏng trực quan */}
-                                    <div style={{ background: '#f0f2f5', height: 24, borderRadius: 12, position: 'relative', overflow: 'hidden' }}>
-                                        <div style={{ 
-                                            position: 'absolute', 
-                                            left: task.id === 1 ? '5%' : (task.id === 2 ? '35%' : '65%'), 
-                                            width: '30%', 
-                                            height: '100%', 
-                                            background: task.progress === 100 ? '#52c41a' : '#1890ff', 
-                                            borderRadius: 12,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            color: '#fff',
-                                            fontSize: '11px',
-                                            fontWeight: 'bold'
-                                        }}>
-                                            {task.progress}%
+                                <Row key={task.id} style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0', alignItems: 'center' }}>
+                                    <Col span={8}><Text strong>{task.name}</Text></Col>
+                                    <Col span={4}><Text type="secondary">{task.start} - {task.end}</Text></Col>
+                                    <Col span={4}><Tag>{task.dependency}</Tag></Col>
+                                    <Col span={8}>
+                                        <div style={{ background: '#f0f2f5', height: 24, borderRadius: 12, position: 'relative', overflow: 'hidden' }}>
+                                            <div style={{
+                                                position: 'absolute',
+                                                left: task.id === 1 ? '5%' : (task.id === 2 ? '35%' : '65%'),
+                                                width: '30%',
+                                                height: '100%',
+                                                background: task.progress === 100 ? '#52c41a' : '#1890ff',
+                                                borderRadius: 12,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: '#fff',
+                                                fontSize: '11px',
+                                                fontWeight: 'bold'
+                                            }}>
+                                                {task.progress}%
+                                            </div>
                                         </div>
-                                    </div>
-                                </Col>
-                            </Row>
-                        ))}
+                                    </Col>
+                                </Row>
+                            ))
+                        ) : (
+                            <Text type="secondary">Chưa có dữ liệu.</Text>
+                        )}
                     </div>
                 </div>
             </Card>
 
-            {/* 4. Bản đồ nhiệt tải lượng nhân sự (Overload Heatmap) */}
-            <Card title={<strong>🔥 Bản đồ nhiệt tải lượng nhân sự (Overload Heatmap)</strong>} style={{ borderRadius: 8 }}>
-                <Alert 
+            <Card title={<strong>Bản đồ nhiệt tải lượng nhân sự (Overload Heatmap)</strong>} style={{ borderRadius: 8 }}>
+                <Alert
                     message="Quy tắc điều chuyển công việc"
-                    description="Các ô màu Đỏ rực tượng trưng cho nhân sự bị quá tải công việc ngày hôm đó (>110%). Manager cần kéo thả hoặc phân phối lại Task để giảm tải tải lượng về vùng màu Xanh nhạt."
+                    description="Các ô màu đỏ rực tượng trưng cho nhân sự bị quá tải công việc ngày hôm đó (>110%). Manager cần kéo thả hoặc phân phối lại Task để giảm tải lượng về vùng màu Xanh nhạt."
                     type="warning"
                     showIcon
                     style={{ marginBottom: 20 }}
@@ -206,19 +281,22 @@ export default function ManagerDashboard() {
                             </tr>
                         </thead>
                         <tbody>
-                            {heatmapData.map((row, index) => (
-                                <tr key={index} style={{ borderBottom: '1px solid #f0f0f0', height: 50 }}>
-                                    <td style={{ fontWeight: 'bold', padding: 10 }}>{row.name}</td>
-                                    <td style={{ background: getHeatmapColor(row.mon), color: row.mon >= 110 ? '#fff' : '#000', fontWeight: 'bold' }}>{row.mon}%</td>
-                                    <td style={{ background: getHeatmapColor(row.tue), color: row.tue >= 110 ? '#fff' : '#000', fontWeight: 'bold' }}>{row.tue}%</td>
-                                    <td style={{ background: getHeatmapColor(row.wed), color: row.wed >= 110 ? '#fff' : '#000', fontWeight: 'bold' }}>{row.wed}%</td>
-                                    <td style={{ background: getHeatmapColor(row.thu), color: row.thu >= 110 ? '#fff' : '#000', fontWeight: 'bold' }}>{row.thu}%</td>
-                                    <td style={{ background: getHeatmapColor(row.fri), color: row.fri >= 110 ? '#fff' : '#000', fontWeight: 'bold' }}>{row.fri}%</td>
-                                    <td style={{ padding: 10 }}>
-                                        <Tag color={row.status === 'Overload' ? 'red' : 'green'}>{row.status}</Tag>
-                                    </td>
-                                </tr>
-                            ))}
+                            {Array.isArray(heatmapData) && heatmapData.length > 0 ? (
+                                heatmapData.map((row, index) => (
+                                    <tr key={index} style={{ borderBottom: '1px solid #f0f0f0', height: 50 }}>
+                                        <td style={{ fontWeight: 'bold', padding: 10 }}>{row.name}</td>
+                                        <td style={{ background: getHeatmapColor(row.mon), color: row.mon >= 110 ? '#fff' : '#000', fontWeight: 'bold' }}>{row.mon}%</td>
+                                        <td style={{ background: getHeatmapColor(row.tue), color: row.tue >= 110 ? '#fff' : '#000', fontWeight: 'bold' }}>{row.tue}%</td>
+                                        <td style={{ background: getHeatmapColor(row.wed), color: row.wed >= 110 ? '#fff' : '#000', fontWeight: 'bold' }}>{row.wed}%</td>
+                                        <td style={{ background: getHeatmapColor(row.thu), color: row.thu >= 110 ? '#fff' : '#000', fontWeight: 'bold' }}>{row.thu}%</td>
+                                        <td style={{ background: getHeatmapColor(row.fri), color: row.fri >= 110 ? '#fff' : '#000', fontWeight: 'bold' }}>{row.fri}%</td>
+                                        <td style={{ padding: 10 }}>
+                                            <Tag color={row.status === 'Overload' ? 'red' : 'green'}>{row.status}</Tag>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : null}
+
                         </tbody>
                     </table>
                 </div>

@@ -239,5 +239,63 @@ namespace MIS_Project_API.Services
                 ? "Đã duyệt miễn trừ hệ số phạt cho Task này."
                 : "Đã từ chối miễn trừ hệ số phạt — Task vẫn bị tính phạt nếu trễ hạn.");
         }
+
+        public async Task<(bool Success, string Message)> DeleteTaskCascadeAsync(int taskId)
+        {
+            var root = await _context.Tasks.FirstOrDefaultAsync(t => t.TaskId == taskId);
+            if (root == null) return (false, "Không tìm thấy Task.");
+
+            // Lấy toàn bộ task con theo cây ParentTaskId
+            var idsToDelete = new List<int>();
+            var queue = new Queue<int>();
+            queue.Enqueue(taskId);
+
+            while (queue.Count > 0)
+            {
+                var currentId = queue.Dequeue();
+                if (idsToDelete.Contains(currentId)) continue;
+                idsToDelete.Add(currentId);
+
+                var childrenIds = await _context.Tasks
+                    .Where(t => t.ParentTaskId == currentId)
+                    .Select(t => t.TaskId)
+                    .ToListAsync();
+
+                foreach (var childId in childrenIds)
+                {
+                    if (!idsToDelete.Contains(childId)) queue.Enqueue(childId);
+                }
+            }
+
+            // Xóa các quan hệ phụ thuộc để tránh orphan/mồ côi
+            var depsToDelete = await _context.TaskDependencies
+                .Where(d => idsToDelete.Contains(d.PredecessorTaskId) || idsToDelete.Contains(d.SuccessorTaskId))
+                .ToListAsync();
+            if (depsToDelete.Count > 0) _context.TaskDependencies.RemoveRange(depsToDelete);
+
+            var logTimesToDelete = await _context.LogTimes
+                .Where(lt => idsToDelete.Contains(lt.TaskId))
+                .ToListAsync();
+            if (logTimesToDelete.Count > 0) _context.LogTimes.RemoveRange(logTimesToDelete);
+
+            var commentsToDelete = await _context.Comments
+                .Where(c => idsToDelete.Contains(c.TaskId))
+                .ToListAsync();
+            if (commentsToDelete.Count > 0) _context.Comments.RemoveRange(commentsToDelete);
+
+            var extensionRequestsToDelete = await _context.ExtensionRequests
+                .Where(er => idsToDelete.Contains(er.TaskId))
+                .ToListAsync();
+            if (extensionRequestsToDelete.Count > 0) _context.ExtensionRequests.RemoveRange(extensionRequestsToDelete);
+
+            var tasksToDelete = await _context.Tasks
+                .Where(t => idsToDelete.Contains(t.TaskId))
+                .ToListAsync();
+            if (tasksToDelete.Count > 0) _context.Tasks.RemoveRange(tasksToDelete);
+
+            await _context.SaveChangesAsync();
+            return (true, "Đã xóa Task (kèm sub-task) thành công.");
+        }
     }
 }
+
