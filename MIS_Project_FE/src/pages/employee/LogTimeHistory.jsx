@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, InputNumber, DatePicker, message, Tag, Space, Popconfirm } from 'antd';
+import { Table, Button, Modal, Form, InputNumber, DatePicker, message, Tag, Space, Popconfirm, Input } from 'antd';
 import { EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import api from '../../services/api';
 import dayjs from 'dayjs';
@@ -18,19 +18,11 @@ export default function LogTimeHistory() {
     const fetchLogTimes = async () => {
         setLoading(true);
         try {
-            // Cần tạo API /logtimes/my-history ở Backend cho Employee
-            const response = await api.get(
-                // Sử dụng Mock API nếu chưa có endpoint thật
-                `/logtimes?userId=${localStorage.getItem("userId")}`
-            ); 
-            setLogTimes(response.data);
+            const response = await api.get('/logtimes/me');
+            setLogTimes(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
-            message.error("Lỗi khi tải lịch sử Log-time!");
-            setLogTimes([ // Mock data
-                { logId: 1, taskName: "Fix lỗi UI bảng Gantt", actualHours: 3, logDate: "2026-06-18", status: "Approved", description: "Sửa lỗi responsive trên mobile" },
-                { logId: 2, taskName: "Viết Unit Test", actualHours: 8, logDate: "2026-06-17", status: "Pending", description: "Hoàn thành 80% test case" },
-                { logId: 3, taskName: "Setup DB", actualHours: 5, logDate: "2026-06-16", status: "Rejected", description: "Chưa đủ bằng chứng" },
-            ]);
+            message.error(error?.response?.data || "Lỗi khi tải lịch sử Log-time!");
+            setLogTimes([]);
         } finally {
             setLoading(false);
         }

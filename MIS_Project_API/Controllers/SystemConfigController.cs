@@ -18,6 +18,37 @@ namespace MIS_Project_API.Controllers
             _context = context;
         }
 
+        [HttpGet]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> GetLatestConfig()
+        {
+            // Lấy config mới nhất theo MonthYear (chuỗi mm/yyyy)
+            var latest = await _context.SystemConfigs
+                .AsNoTracking()
+                .OrderByDescending(c => c.MonthYear)
+                .FirstOrDefaultAsync();
+
+            if (latest == null)
+            {
+                return Ok(new
+                {
+                    month_year = "06/2026",
+                    standard_working_hours = 176,
+                    penalty_factor = "{\"penalty_1_2_days\":0.8,\"penalty_3_5_days\":0.5,\"penalty_over_5_days\":0.0}",
+                    // Holidays dạng int trong DB, FE hiện đã được vô hiệu hóa UI Holidays nên không cần map
+                    holidays = latest?.Holidays
+                });
+            }
+
+            return Ok(new
+            {
+                month_year = latest.MonthYear,
+                standard_working_hours = latest.StandardWorkingHours,
+                penalty_factor = latest.PenaltyFactor,
+                holidays = latest.Holidays
+            });
+        }
+
         [HttpPost]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> SaveConfig([FromBody] SystemConfigDto dto)

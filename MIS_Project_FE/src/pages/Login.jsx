@@ -23,19 +23,63 @@ export default function Login() {
                     // Token hết hạn thì xóa đi
                     localStorage.removeItem('token');
                     localStorage.removeItem('role');
+                    localStorage.removeItem('fullName');
+                    localStorage.removeItem('username');
                 }
             } catch (e) {
                 localStorage.removeItem('token');
                 localStorage.removeItem('role');
+                localStorage.removeItem('fullName');
+                localStorage.removeItem('username');
             }
         }
     }, []);
 
-    const redirectByRole = (role) => {
+    const normalizeRoleValue = (r) => {
+        const s = (r ?? '').toString().trim();
+        const upper = s.replace(/_/g, '-').replace(/\s+/g, '-').toUpperCase();
+
+        // Canonical mapping
+        if (upper === 'ADMIN') return 'Admin';
+        if (upper === 'MANAGER') return 'Manager';
+        if (upper === 'EMPLOYEE') return 'Employee';
+
+        // C-Level variants -> canonical 'C-Level'
+        if (upper === 'CLEVEL' || upper === 'C-LEVEL' || upper === 'C_LEVEL') return 'C-Level';
+
+        return s ? s : '';
+    };
+
+    const redirectByRole = (rawRole) => {
+        const role = normalizeRoleValue(rawRole);
         if (role === 'Admin') navigate('/admin');
         else if (role === 'Manager') navigate('/manager');
         else if (role === 'C-Level') navigate('/c-level');
-        else navigate('/employee');
+        else if (role === 'Employee') navigate('/employee');
+        else navigate('/unauthorized');
+    };
+
+    const extractUsernameFromJwtToken = (token) => {
+        try {
+            // Decode payload bằng javascript thuần (không phụ thuộc thư viện)
+            const payloadBase64 = token.split('.')[1];
+            // jwt uses base64url, cần thay thế '-'->'+' '_'->'/' và thêm '=' nếu thiếu
+            const base64 = payloadBase64.replace(/-/g, '+').replace(/_/g, '/');
+            const padded = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, '=');
+
+            const payload = JSON.parse(atob(padded));
+
+            const extractedName =
+                payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'] ||
+                payload.unique_name ||
+                payload.name ||
+                payload.sub ||
+                'User';
+
+            return extractedName ? extractedName.toString().trim() : '';
+        } catch (e) {
+            return '';
+        }
     };
 
     const onFinish = async (values) => {
@@ -46,7 +90,9 @@ export default function Login() {
                 password: values.password
             });
 
-            const token = response?.data?.token;
+            const responseData = response?.data || {};
+
+            const token = responseData?.token;
             if (!token) {
                 throw new Error('API không trả về token.');
             }
@@ -54,6 +100,7 @@ export default function Login() {
             localStorage.setItem('token', token);
 
             const decoded = jwtDecode(token);
+
             const role =
                 decoded?.role ||
                 decoded?.['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ||
@@ -64,9 +111,17 @@ export default function Login() {
             }
             localStorage.setItem('role', role);
 
+            // Lấy username/fullName từ JWT claims chuẩn .NET
+            const extractedUsername = extractUsernameFromJwtToken(token);
+            if (extractedUsername) {
+                // Key PHẢI khớp với MainLayout.jsx
+                localStorage.setItem('username', extractedUsername);
+                // optional: giữ fullName để fallback nếu cần
+                localStorage.setItem('fullName', extractedUsername);
+            }
+
             message.success('Đăng nhập thành công!');
             redirectByRole(role);
-
         } catch (error) {
             const status = error?.response?.status;
             const data = error?.response?.data;
@@ -76,12 +131,13 @@ export default function Login() {
                 message.error(data);
             } else if (data?.message) {
                 message.error(data.message);
-            } else if (status === 401 || status === 403) {
-                message.error('Đăng nhập thất bại (Sai tài khoản/mật khẩu hoặc tài khoản bị khóa).');
+            } else if (status === 401 || status === 400) {
+                message.error('Sai tài khoản hoặc mật khẩu!');
+            } else if (status === 403) {
+                message.error(data?.message || 'Tài khoản bị khóa hoặc không đủ quyền.');
             } else {
                 message.error('Không thể đăng nhập. Vui lòng kiểm tra API/Network.');
             }
-
         } finally {
             setLoading(false);
         }
@@ -116,3 +172,4 @@ export default function Login() {
         </div>
     );
 }
+

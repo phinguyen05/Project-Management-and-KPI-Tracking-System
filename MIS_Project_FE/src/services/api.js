@@ -17,8 +17,15 @@ api.interceptors.response.use(
     (response) => response,
     (error) => {
         const status = error?.response?.status;
+        const requestUrl = error?.config?.url || '';
 
+        // Trường hợp đăng nhập sai mật khẩu: không reset token/role + không ép điều hướng
         if (status === 401) {
+            const isLoginRequest = requestUrl.includes('/auth/login') || requestUrl.includes('login');
+            if (isLoginRequest) {
+                return Promise.reject(error);
+            }
+
             localStorage.removeItem('token');
             localStorage.removeItem('role');
 
@@ -40,6 +47,7 @@ api.interceptors.response.use(
         return Promise.reject(error);
     }
 );
+
 
 
 export default api;

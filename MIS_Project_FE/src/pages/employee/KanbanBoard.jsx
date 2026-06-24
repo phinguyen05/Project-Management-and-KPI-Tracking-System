@@ -16,6 +16,7 @@ import {
     List,
     Divider,
     Select,
+    Upload,
 } from 'antd';
 import {
     ClockCircleOutlined,
@@ -25,6 +26,7 @@ import {
     MessageOutlined,
     CalendarOutlined,
     UserOutlined,
+    UploadOutlined,
 } from '@ant-design/icons';
 import api from '../../services/api';
 import dayjs from 'dayjs';
@@ -39,6 +41,7 @@ export default function KanbanBoard() {
     const [selectedTask, setSelectedTask] = useState(null);
     const [showLogForm, setShowLogForm] = useState(false); 
     const [showExtendForm, setShowExtendForm] = useState(false);
+    const [logFile, setLogFile] = useState(null);
     const [comments, setComments] = useState([]);
     const [newComment, setNewComment] = useState('');
     const [logForm] = Form.useForm();
@@ -136,17 +139,22 @@ export default function KanbanBoard() {
 
     const handleSubmitLogTime = async (values) => {
         try {
-            const payload = {
-                taskId: selectedTask.taskId,
-                actualHours: values.actualHours,
-                logDate: values.logDate.format('YYYY-MM-DD'),
-                description: values.description || "",
-                attachedFile: "" 
-            };
-            
-            await api.post('/logtimes', payload); 
+            const formData = new FormData();
+            formData.append('taskId', selectedTask.taskId);
+            formData.append('actualHours', values.actualHours);
+            formData.append('logDate', values.logDate.format('YYYY-MM-DD'));
+            formData.append('description', values.description || '');
+            if (logFile) {
+                formData.append('attachedFile', logFile);
+            }
+
+            await api.post('/logtimes', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+
             message.success('Nộp báo cáo Log-time thành công! Đang chờ Quản lý phê duyệt.');
             setShowLogForm(false);
+            setLogFile(null);
             logForm.resetFields();
             setIsTaskModalVisible(false);
         } catch (error) {
@@ -289,6 +297,17 @@ export default function KanbanBoard() {
                                 </Form.Item>
                                 <Form.Item name="description" label="Ghi chú (Tùy chọn)">
                                     <Input.TextArea rows={2} placeholder="Nhập tóm tắt công việc đã làm..." />
+                                </Form.Item>
+                                <Form.Item label="Đính kèm file bằng chứng (tùy chọn)">
+                                    <Upload
+                                        beforeUpload={(file) => {
+                                            setLogFile(file);
+                                            return false; // prevent auto upload
+                                        }}
+                                        maxCount={1}
+                                    >
+                                        <Button icon={<UploadOutlined />}>Chọn file</Button>
+                                    </Upload>
                                 </Form.Item>
                                 <Form.Item>
                                     <Button type="primary" htmlType="submit" icon={<SendOutlined />} block>

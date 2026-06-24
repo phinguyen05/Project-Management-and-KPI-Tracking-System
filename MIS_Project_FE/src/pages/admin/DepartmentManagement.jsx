@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message, Popconfirm, Space } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, message, Popconfirm, Space, Avatar } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, UserOutlined } from '@ant-design/icons';
 import api from '../../services/api';
 
@@ -17,7 +17,7 @@ export default function DepartmentManagement() {
 
     const fetchDepartments = async () => {
         try {
-            const response = await api.get('/department'); // Sửa thành /department (số ít)
+            const response = await api.get('/departments');
             setDepartments(response.data);
         } catch (error) {
             message.error('Lỗi khi tải danh sách phòng ban!');
@@ -47,7 +47,7 @@ export default function DepartmentManagement() {
 
     const handleDelete = async (deptId) => {
         try {
-            await api.delete(`/department/${deptId}`); // Sửa thành /department (số ít)
+            await api.delete(`/departments/${deptId}`);
             message.success('Xóa phòng ban thành công!');
             fetchDepartments();
         } catch (error) {
@@ -59,10 +59,10 @@ export default function DepartmentManagement() {
         try {
             const values = await form.validateFields();
             if (editingDept) {
-                await api.put(`/department/${editingDept.departmentId}`, values);
+                await api.put(`/departments/${editingDept.id}`, values);
                 message.success('Cập nhật phòng ban thành công!');
             } else {
-                await api.post('/department', values);
+                await api.post('/departments', values);
                 message.success('Thêm phòng ban thành công!');
             }
             setIsModalVisible(false);
@@ -88,7 +88,7 @@ export default function DepartmentManagement() {
             dataIndex: 'memberCount', // Cần Backend trả về trường này
             key: 'memberCount',
             render: (text, record) => {
-                const count = users.filter(u => u.departmentId === record.departmentId).length;
+                const count = users.filter(u => u.departmentId === record.id).length;
                 return count; // Đếm số lượng user trong phòng ban này
             }
         },
@@ -98,7 +98,7 @@ export default function DepartmentManagement() {
             render: (_, record) => (
                 <Space size="middle">
                     <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} />
-                    <Popconfirm title="Bạn có chắc muốn xóa?" onConfirm={() => handleDelete(record.departmentId)} okText="Có" cancelText="Không">
+                    <Popconfirm title="Bạn có chắc muốn xóa?" onConfirm={() => handleDelete(record.id)} okText="Có" cancelText="Không">
                         <Button icon={<DeleteOutlined />} danger />
                     </Popconfirm>
                 </Space>
@@ -112,14 +112,14 @@ export default function DepartmentManagement() {
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd} style={{ marginBottom: 16 }}>
                 Thêm Phòng Ban Mới
             </Button>
-            <Table dataSource={departments} columns={columns} rowKey="departmentId" />
+            <Table dataSource={departments} columns={columns} rowKey="id" />
 
             <Modal
                 title={editingDept ? 'Sửa Phòng Ban' : 'Thêm Phòng Ban'}
                 open={isModalVisible}
                 onOk={handleSave}
                 onCancel={() => setIsModalVisible(false)}
-                destroyOnClose
+                destroyOnHidden
             >
                 <Form form={form} layout="vertical" name="department_form">
                     <Form.Item name="name" label="Tên Phòng Ban" rules={[{ required: true, message: 'Vui lòng nhập tên phòng ban!' }]}>

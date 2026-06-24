@@ -1,4 +1,6 @@
-﻿namespace MIS_Project_API.DTOs.LogTime
+﻿using Microsoft.AspNetCore.Http;
+
+namespace MIS_Project_API.DTOs.LogTime
 {
     public class CreateLogTimeDto
     {
@@ -7,8 +9,8 @@
         public string? Description { get; set; }
         public DateTime LogDate { get; set; }
 
-        // ĐÃ FIX: Thêm AttachedFile
-        public string? AttachedFile { get; set; }
+        // AttachedFile bằng chứng (file upload)
+        public IFormFile? AttachedFile { get; set; }
     }
 
     public class ApproveLogTimeDto
@@ -16,3 +18,4 @@
         public string Status { get; set; } = null!; // "Approved" hoặc "Rejected"
     }
 }
+

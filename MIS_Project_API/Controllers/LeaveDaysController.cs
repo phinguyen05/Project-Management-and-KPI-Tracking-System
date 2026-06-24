@@ -19,8 +19,32 @@ namespace MIS_Project_API.Controllers
             _context = context;
         }
 
+        // GET /api/leavedays
+        [HttpGet]
+        public async Task<IActionResult> GetAllLeaveDays()
+        {
+            var leaves = await _context.LeaveDays
+                .AsNoTracking()
+                .Include(ld => ld.User)
+                .OrderByDescending(ld => ld.CreatedAt)
+                .Select(ld => new
+                {
+                    leaveId = ld.LeaveId,
+                    userId = ld.UserId,
+                    userName = ld.User != null ? ld.User.FullName : null,
+                    leaveDate = ld.LeaveDate,
+                    reason = ld.Reason,
+                    status = ld.Status,
+                    createdAt = ld.CreatedAt
+                })
+                .ToListAsync();
+
+            return Ok(leaves);
+        }
+
         [HttpPost]
         public async Task<IActionResult> SubmitLeaveRequest([FromBody] CreateLeaveDayDto dto)
+
         {
             int currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
@@ -39,9 +63,11 @@ namespace MIS_Project_API.Controllers
             return Ok(new { Message = "Đã gửi đơn xin nghỉ phép.", LeaveId = leaveDay.LeaveId });
         }
 
-        [HttpPatch("{id}/approve")]
+        // PUT /api/leavedays/{id}/status
+        [HttpPut("{id}/status")]
         [Authorize(Roles = "Manager,Admin")]
-        public async Task<IActionResult> ApproveLeaveDay(int id, [FromBody] ApproveLeaveDayDto dto)
+        public async Task<IActionResult> UpdateLeaveDayStatus(int id, [FromBody] ApproveLeaveDayDto dto)
+
         {
             var leaveDay = await _context.LeaveDays.FindAsync(id);
             if (leaveDay == null) return NotFound("Không tìm thấy đơn xin nghỉ.");
@@ -54,5 +80,6 @@ namespace MIS_Project_API.Controllers
 
             return Ok(new { Message = $"Đã {dto.Status} đơn xin nghỉ phép." });
         }
+
     }
 }

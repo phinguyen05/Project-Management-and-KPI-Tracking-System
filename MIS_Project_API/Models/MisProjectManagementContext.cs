@@ -402,6 +402,11 @@ public partial class MisProjectManagementContext : DbContext
             entity.HasOne(d => d.UpdatedByNavigation).WithMany(p => p.TaskUpdatedByNavigations)
                 .HasForeignKey(d => d.UpdatedBy)
                 .HasConstraintName("FK__Task__updated_by__66603565");
+
+            // Normalize allowed Task statuses to avoid CHECK constraint violations
+            // (DB constraint must also be updated via migration)
+            entity.HasCheckConstraint("CK_Task_Status",
+                "[status] IN ('To_Do','Doing','Done','Overdue')");
         });
 
         modelBuilder.Entity<TaskDependency>(entity =>

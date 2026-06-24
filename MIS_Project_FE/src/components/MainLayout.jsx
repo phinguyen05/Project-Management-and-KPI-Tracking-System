@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Layout, Menu, Button, Dropdown, Avatar, theme, message, Badge, List, Card } from 'antd';
-import { 
-    DashboardOutlined, ProjectOutlined, UserOutlined, SettingOutlined, 
-    FileTextOutlined, LogoutOutlined, CheckSquareOutlined, 
-    MenuFoldOutlined, MenuUnfoldOutlined, TeamOutlined, BellOutlined 
+import {
+    DashboardOutlined, ProjectOutlined, UserOutlined, SettingOutlined,
+    FileTextOutlined, LogoutOutlined, CheckSquareOutlined,
+    MenuFoldOutlined, MenuUnfoldOutlined, TeamOutlined, BellOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
@@ -17,68 +17,100 @@ export default function MainLayout({ children }) {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const role = localStorage.getItem('role') || 'Employee';
-    const fullName = localStorage.getItem('fullName') || role;
+    const roleRaw = localStorage.getItem('role') || 'Employee';
+    const normalizeRoleValue = (r) => {
+        const s = (r ?? '').toString().trim();
+        const upper = s.replace(/_/g, '-').replace(/\s+/g, '-').toUpperCase();
+        if (upper === 'ADMIN') return 'Admin';
+        if (upper === 'MANAGER') return 'Manager';
+        if (upper === 'EMPLOYEE') return 'Employee';
+        if (upper === 'CLEVEL' || upper === 'C-LEVEL' || upper === 'C_LEVEL') return 'C-Level';
+        return s;
+    };
 
-    // Tải thông báo từ Backend
+    const role = normalizeRoleValue(roleRaw);
+
+    // Lấy thêm username/fullName từ localStorage (fallback an toàn)
+    const usernameFromStorage = localStorage.getItem('username') || localStorage.getItem('fullName');
+    const username = usernameFromStorage ? usernameFromStorage.toString().trim() : '';
+
+    // Hiển thị: {username} - {role} (ví dụ: nguyenvana - C-Level)
+    // Nếu không lấy được username -> hiển thị role như cũ.
+    const displayUserName = username ? `${username} - ${role}` : role;
+
+    // Tải thông báo từ Backend (không dùng mock data)
     const fetchNotifications = async () => {
         try {
-            const res = await api.get('/notification');
-            setNotifications(res.data);
+            const res = await api.get('/notifications');
+            setNotifications(Array.isArray(res.data) ? res.data : []);
         } catch (err) {
-            console.log("Chưa có API thông báo hoặc lỗi kết nối.");
-            setNotifications([
-                { notifId: 1, content: "[Task Mới] Quản lý vừa giao task 'Viết API Backend' cho bạn", isRead: false, createdAt: new Date() },
-                { notifId: 2, content: "[Sắp đến hạn] Task 'Fix lỗi UI bảng Gantt' sẽ hết hạn vào ngày mai", isRead: false, createdAt: new Date() },
-                { notifId: 3, content: "[Trễ hạn] Task 'Setup DB' đã trễ hạn 1 ngày. Vui lòng cập nhật ngay!", isRead: true, createdAt: new Date() }
-            ]);
+            setNotifications([]);
         }
     };
 
     useEffect(() => {
         fetchNotifications();
+        const intervalId = setInterval(() => {
+            fetchNotifications();
+        }, 30000);
+
+        return () => clearInterval(intervalId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const markAsRead = async (notifId) => {
+    const markAsRead = async (id) => {
         try {
-            await api.patch(`/notification/${notifId}/read`);
-            message.success("Đã đánh dấu đã đọc");
+            await api.put(`/notifications/${id}/read`);
+            message.success('Đã đánh dấu đã đọc');
             fetchNotifications();
         } catch (err) {
-            // Giả lập mark as read thành công
-            setNotifications(notifications.map(n => n.notifId === notifId ? { ...n, isRead: true } : n));
-            message.success("Đã đọc thông báo");
+            message.error('Không thể đánh dấu đã đọc');
         }
     };
+
 
     const handleLogout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('role');
         localStorage.removeItem('fullName');
+        localStorage.removeItem('username');
         message.success('Đã đăng xuất!');
         navigate('/login');
     };
 
     const getMenuItems = () => {
-        if (role === 'Admin') return [
-            { key: '/admin', icon: <UserOutlined />, label: 'Tài khoản' },
-            { key: '/admin/departments', icon: <TeamOutlined />, label: 'Phòng ban' },
-            { key: '/admin/settings', icon: <SettingOutlined />, label: 'Cấu hình hệ thống' },
-            { key: '/admin/audit-log', icon: <FileTextOutlined />, label: 'Audit Log' },
-        ];
-        if (role === 'Manager') return [
-            { key: '/manager', icon: <DashboardOutlined />, label: 'Dashboard' },
-            { key: '/manager/projects', icon: <ProjectOutlined />, label: 'Quản lý Dự án' },
-            { key: '/manager/approvals', icon: <CheckSquareOutlined />, label: 'Phê duyệt' },
-            { key: '/manager/kpi-review', icon: <SettingOutlined />, label: 'Chốt KPI Cuối Tháng' },
-        ];
-        if (role === 'C-Level') return [
-            { key: '/c-level', icon: <DashboardOutlined />, label: 'C-Level Dashboard' },
-        ];
+        // BẮT BUỘC: role đã được normalize ở trên
+        if (role === 'Admin') {
+            return [
+                { key: '/admin', icon: <UserOutlined />, label: 'Tài khoản' },
+                { key: '/admin/departments', icon: <TeamOutlined />, label: 'Phòng ban' },
+                { key: '/admin/settings', icon: <SettingOutlined />, label: 'Cấu hình hệ thống' },
+                { key: '/admin/audit-log', icon: <FileTextOutlined />, label: 'Audit Log' },
+            ];
+        }
+
+        if (role === 'Manager') {
+            return [
+                { key: '/manager', icon: <DashboardOutlined />, label: 'Dashboard' },
+                { key: '/manager/projects', icon: <ProjectOutlined />, label: 'Quản lý Dự án' },
+                { key: '/manager/approvals', icon: <CheckSquareOutlined />, label: 'Phê duyệt' },
+                { key: '/manager/kpi-review', icon: <SettingOutlined />, label: 'Chốt KPI Cuối Tháng' },
+            ];
+        }
+
+        if (role === 'C-Level') {
+            // C-Level chỉ được 1 menu: Tổng quan Dự án
+            return [
+                { key: '/c-level', icon: <DashboardOutlined />, label: 'Tổng quan Dự án' },
+            ];
+        }
+
+        // Employee
         return [
             { key: '/employee', icon: <DashboardOutlined />, label: 'Trang chủ' },
             { key: '/employee/tasks', icon: <ProjectOutlined />, label: 'Công việc' },
             { key: '/employee/log-time', icon: <FileTextOutlined />, label: 'Lịch sử Log-time' },
+            { key: '/employee/leave', icon: <CheckSquareOutlined />, label: 'Xin nghỉ phép' },
         ];
     };
 
@@ -93,13 +125,13 @@ export default function MainLayout({ children }) {
                 size="small"
                 dataSource={notifications}
                 renderItem={item => (
-                    <List.Item 
+                    <List.Item
                         style={{ cursor: 'pointer', background: item.isRead ? '#ffffff' : '#e6f7ff', padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}
                         onClick={() => handleNotificationClick(item)}
                     >
-                        <List.Item.Meta 
-                            title={<span style={{ fontWeight: item.isRead ? 'normal' : 'bold', fontSize: '13px' }}>{item.content}</span>} 
-                            description={<span style={{ fontSize: '11px' }}>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ''}</span>} 
+                        <List.Item.Meta
+                            title={<span style={{ fontWeight: item.isRead ? 'normal' : 'bold', fontSize: '13px' }}>{item.message}</span>}
+                            description={<span style={{ fontSize: '11px' }}>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ''}</span>}
                         />
                     </List.Item>
                 )}
@@ -107,13 +139,31 @@ export default function MainLayout({ children }) {
         </Card>
     );
 
-    const handleNotificationClick = (item) => {
-        if (!item.isRead) {
-            markAsRead(item.notifId);
-        } else {
-            message.info("Thông báo này đã được đọc");
+    const handleNotificationClick = async (item) => {
+        if (!item?.isRead) {
+            // UX: cập nhật UI ngay lập tức
+            setNotifications((prev) =>
+                prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n))
+            );
+
+            try {
+                await api.put(`/notifications/${item.id}/read`);
+            } catch (err) {
+                // Nếu call API thất bại thì revert
+                setNotifications((prev) =>
+                    prev.map((n) => (n.id === item.id ? { ...n, isRead: false } : n))
+                );
+                message.error('Không thể đánh dấu đã đọc');
+                return;
+            }
+
+            message.success('Đã đánh dấu đã đọc');
+            return;
         }
+
+        message.info('Thông báo này đã được đọc');
     };
+
 
     return (
         <Layout style={{ minHeight: '100vh' }}>
@@ -128,14 +178,14 @@ export default function MainLayout({ children }) {
                     <Button type="text" icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setCollapsed(!collapsed)} />
                     <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
                         <Dropdown popupRender={() => notificationMenu} trigger={['click']}>
-                            <Badge count={notifications.filter(n => !n.isRead).length} size="small">
+                            <Badge count={notifications.filter((n) => !n?.isRead).length} size="small">
                                 <BellOutlined style={{ fontSize: '20px', cursor: 'pointer' }} />
                             </Badge>
                         </Dropdown>
                         <Dropdown menu={userMenu} placement="bottomRight">
                             <span style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <Avatar icon={<UserOutlined />} />
-                                <span>{fullName}</span>
+                                <span>{displayUserName}</span>
                             </span>
                         </Dropdown>
                     </div>
@@ -147,3 +197,4 @@ export default function MainLayout({ children }) {
         </Layout>
     );
 }
+

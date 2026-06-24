@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Button, Card, Table, message, Row, Col, InputNumber, Select, Space } from 'antd';
-import { SaveOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Form, Input, Button, Card, message, Row, Col, InputNumber } from 'antd';
+import { SaveOutlined } from '@ant-design/icons';
 import api from '../../services/api';
 
 export default function SystemSettings() {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
-    const [holidays, setHolidays] = useState([]);
-    const [holidayLoading, setHolidayLoading] = useState(false);
-    const [holidayForm] = Form.useForm();
+
 
     const fetchConfig = async () => {
         setLoading(true);
@@ -46,41 +44,27 @@ export default function SystemSettings() {
         }
     };
 
-    const fetchHolidays = async () => {
-        setHolidayLoading(true);
-        try {
-            const response = await api.get('/systemconfig/holidays');
-            setHolidays(response.data || []);
-        } catch (error) {
-            setHolidays([
-                { id: 1, holiday_date: '2026-06-01', description: 'Ngày Quốc tế Thiếu nhi' }
-            ]);
-        } finally {
-            setHolidayLoading(false);
-        }
-    };
+
 
     useEffect(() => {
         fetchConfig();
-        fetchHolidays();
     }, []);
 
     const handleSaveConfig = async (values) => {
         setLoading(true);
         try {
-            const penalty_factor = JSON.stringify({
-                penalty_1_2_days: values.penalty_1_2_days,
-                penalty_3_5_days: values.penalty_3_5_days,
-                penalty_over_5_days: values.penalty_over_5_days,
-            });
-
             const payload = {
-                month_year: values.month_year,
-                standard_working_hours: values.standard_working_hours,
-                penalty_factor: penalty_factor
+                MonthYear: String(values.month_year),
+                StandardWorkingHours: parseInt(values.standard_working_hours, 10),
+                Holidays: 0,
+                PenaltyFactor: JSON.stringify({
+                    penalty_1_2_days: parseFloat(values.penalty_1_2_days),
+                    penalty_3_5_days: parseFloat(values.penalty_3_5_days),
+                    penalty_over_5_days: parseFloat(values.penalty_over_5_days),
+                }),
             };
 
-            await api.post('/systemconfig', payload);
+            await api.post('/SystemConfig', payload);
             message.success('Cập nhật cấu hình hệ thống thành công!');
         } catch (error) {
             message.error('Lưu cấu hình hệ thống thất bại!');
@@ -89,38 +73,7 @@ export default function SystemSettings() {
         }
     };
 
-    const handleAddHoliday = async (values) => {
-        try {
-            await api.post('/systemconfig/holidays', values);
-            message.success('Thêm ngày nghỉ lễ thành công!');
-            holidayForm.resetFields();
-            fetchHolidays();
-        } catch (error) {
-            message.error('Thao tác thất bại!');
-        }
-    };
 
-    const handleDeleteHoliday = async (id) => {
-        try {
-            await api.delete(`/systemconfig/holidays/${id}`);
-            message.success('Đã xóa ngày nghỉ lễ!');
-            fetchHolidays();
-        } catch (error) {
-            message.error('Xóa ngày nghỉ lễ thất bại!');
-        }
-    };
-
-    const holidayColumns = [
-        { title: 'Ngày nghỉ lễ', dataIndex: 'holiday_date', key: 'holiday_date' },
-        { title: 'Mô tả', dataIndex: 'description', key: 'description' },
-        {
-            title: 'Hành động',
-            key: 'action',
-            render: (_, record) => (
-                <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteHoliday(record.id)}>Xóa</Button>
-            )
-        }
-    ];
 
     return (
         <Row gutter={[16, 16]}>
@@ -162,30 +115,6 @@ export default function SystemSettings() {
                 </Card>
             </Col>
             
-            <Col xs={24} md={12}>
-                <Card title="Quản lý ngày nghỉ lễ (Giảm trừ KPI Khối lượng)">
-                    <Form form={holidayForm} layout="inline" onFinish={handleAddHoliday} style={{ marginBottom: 16 }}>
-                        <Form.Item name="holiday_date" rules={[{ required: true, message: 'Nhập ngày!' }]}>
-                            <Input type="date" style={{ width: 150 }} />
-                        </Form.Item>
-                        <Form.Item name="description" rules={[{ required: true, message: 'Nhập mô tả!' }]}>
-                            <Input placeholder="Mô tả ngày lễ" style={{ width: 180 }} />
-                        </Form.Item>
-                        <Form.Item>
-                            <Button type="primary" htmlType="submit" icon={<PlusOutlined />}>Thêm</Button>
-                        </Form.Item>
-                    </Form>
-
-                    <Table 
-                        dataSource={holidays} 
-                        columns={holidayColumns} 
-                        rowKey="id" 
-                        loading={holidayLoading} 
-                        size="small" 
-                        pagination={{ pageSize: 5 }}
-                    />
-                </Card>
-            </Col>
         </Row>
     );
 }

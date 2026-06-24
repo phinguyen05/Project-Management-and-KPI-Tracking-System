@@ -51,6 +51,7 @@ builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddScoped<IKpiService, KpiService>();
 builder.Services.AddScoped<IBackgroundJobService, BackgroundJobService>();
+builder.Services.AddHostedService<TaskStatusUpdaterService>();
 
 // Cấu hình Hangfire
 builder.Services.AddHangfire(config => config.UseSqlServerStorage(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -66,17 +67,15 @@ var app = builder.Build();
 app.UseHttpsRedirection();
 app.UseCors("AllowReactApp");
 app.UseStaticFiles();
+app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.UseHangfireDashboard();
 
-// Đăng ký các Cron Job chạy hàng ngày
+// Đăng ký các Cron Job chạy hàng ngày (không chạy NotificationController nữa vì đã chuyển sang BackgroundService)
 RecurringJob.AddOrUpdate<IBackgroundJobService>("CheckOverdueTasks", service => service.CheckAndAlertOverdueTasksAsync(), Cron.Daily);
 RecurringJob.AddOrUpdate<IBackgroundJobService>("AutoApprovePendingLogTimes", service => service.AutoApprovePendingLogTimesAsync(), Cron.Daily);
-RecurringJob.AddOrUpdate<MIS_Project_API.Controllers.NotificationController>(
-    "check-task-deadlines",
-    controller => controller.CheckTaskDeadlinesJob(),
-    Cron.Daily(8, 0));
+
 
 app.Run();

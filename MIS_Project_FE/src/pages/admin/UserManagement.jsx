@@ -22,23 +22,21 @@ export default function UserManagement() {
         }
     };
 
-    // ĐÃ THÊM: Hàm kéo danh sách phòng ban từ Backend
-   const fetchDepartments = async () => {
-    try {
-        console.log("Đang gọi API tới: /api/department"); // Log để xem trong F12
-        const response = await api.get('/Department'); 
-        console.log("Dữ liệu nhận về:", response.data); // Log dữ liệu nhận được
-        setDepartments(response.data);
-    } catch (error) {
-        console.error('Lỗi chi tiết:', error);
-        // Nếu lỗi là 401, nghĩa là Token chưa được gửi kèm
-        if (error.response && error.response.status === 401) {
-            message.error('Bạn chưa đăng nhập hoặc Token hết hạn!');
-        } else {
-            message.error('Không tìm thấy API phòng ban!');
+        // ĐÃ THÊM: Hàm kéo danh sách phòng ban từ Backend
+    const fetchDepartments = async () => {
+        try {
+            const response = await api.get('/departments');
+            setDepartments(response.data);
+        } catch (error) {
+            console.error('Lỗi chi tiết:', error);
+            // Nếu lỗi là 401, nghĩa là Token chưa được gửi kèm
+            if (error.response && error.response.status === 401) {
+                message.error('Bạn chưa đăng nhập hoặc Token hết hạn!');
+            } else {
+                message.error('Không tìm thấy API phòng ban!');
+            }
         }
-    }
-};
+    };
 
     useEffect(() => {
         fetchUsers();

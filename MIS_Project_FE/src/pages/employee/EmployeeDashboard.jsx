@@ -1,20 +1,65 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Progress, List, Tag, Space } from 'antd'; // Đã import đầy đủ Space và Progress
+import { Card, Row, Col, Progress, List, Tag, Space, message } from 'antd'; // Đã import đầy đủ Space và Progress
 import { ClockCircleOutlined } from '@ant-design/icons';
+import api from '../../services/api';
 
 export default function EmployeeDashboard() {
     const [kpi, setKpi] = useState({ timeliness: 0, efficiency: 0, capacity: 0, managerScore: 0 });
     const [dueTasks, setDueTasks] = useState([]);
 
     useEffect(() => {
-        // Tạm thời dùng dữ liệu giả để tránh lỗi 404 API Not Found
-        // Chờ đến khi Module KPI Backend hoàn thiện sẽ nối API thật vào đây
-        setKpi({ timeliness: 90, efficiency: 70, capacity: 100, managerScore: 40 });
-        setDueTasks([
-            { id: 1, name: 'Fix lỗi UI bảng Gantt', deadline: '2026-06-20', status: 'Doing' },
-            { id: 2, name: 'Viết tài liệu API', deadline: '2026-06-21', status: 'To_Do' }
-        ]);
+        const init = async () => {
+            // Tự động lấy userId từ Token claim ở backend (không phụ thuộc localStorage)
+
+
+            try {
+                const now = new Date();
+                const month = now.getMonth() + 1;
+                const year = now.getFullYear();
+
+                // Load KPI
+                const res = await api.get(`/kpis/me?month=${month}&year=${year}`);
+
+                const data = res?.data || {};
+
+                setKpi({
+                    timeliness: data.kpi_timeliness ?? 0,
+                    efficiency: data.kpi_efficiency ?? 0,
+                    capacity: data.kpi_capacity ?? 0,
+                    managerScore: data.kpi_manager_evaluation ?? 0,
+                });
+
+                // Load tasks and map due soon
+                // Chỉ thị các task chưa Done và sắp theo deadline gần nhất
+                const tasksRes = await api.get('/tasks/me');
+                const tasks = Array.isArray(tasksRes?.data) ? tasksRes.data : [];
+
+
+                const filtered = tasks
+                    .filter(t => (t.status ?? '') !== 'Done')
+                    .sort((a, b) => {
+                        const da = a.deadline ? new Date(a.deadline).getTime() : Number.MAX_SAFE_INTEGER;
+                        const db = b.deadline ? new Date(b.deadline).getTime() : Number.MAX_SAFE_INTEGER;
+                        return da - db;
+                    })
+                    .map((t, idx) => ({
+                        id: t.taskId ?? t.id ?? idx,
+                        name: t.name ?? t.taskName ?? 'Task',
+                        deadline: t.deadline ? new Date(t.deadline).toISOString().slice(0, 10) : '',
+                        status: t.status,
+                    }));
+
+                setDueTasks(filtered);
+            } catch (e) {
+                message.error('Không tải được KPI cá nhân hoặc danh sách task.');
+            }
+
+        };
+
+        init();
     }, []);
+
+
 
     return (
         <div>
