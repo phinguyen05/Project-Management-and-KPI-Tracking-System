@@ -1,0 +1,19 @@
+\babel@toc {vietnamese}{}\relax 
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {1.1}{\ignorespaces Tóm tắt các tiêu chí đánh giá KPI cho nhân sự kỹ thuật}}{17}{table.1.1}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {2.1}{\ignorespaces Khảo sát và đánh giá 5 thành phần hệ thống thông tin hiện tại}}{20}{table.2.1}%
+\contentsline {table}{\numberline {2.2}{\ignorespaces Ma trận phân quyền (CRUD Matrix) đối với các phân hệ cốt lõi}}{22}{table.2.2}%
+\contentsline {table}{\numberline {2.3}{\ignorespaces Mô tả kịch bản chi tiết cho các Use Case cốt lõi}}{24}{table.2.3}%
+\contentsline {table}{\numberline {2.4}{\ignorespaces Các loại ngoại lệ nghiệp vụ và cơ chế xử lý tự động của KPI Engine}}{28}{table.2.4}%
+\contentsline {table}{\numberline {2.5}{\ignorespaces Từ điển dữ liệu bảng Người dùng (Users Table)}}{30}{table.2.5}%
+\contentsline {table}{\numberline {2.6}{\ignorespaces Từ điển dữ liệu bảng Công việc (Tasks Table)}}{31}{table.2.6}%
+\contentsline {table}{\numberline {2.7}{\ignorespaces Từ điển dữ liệu bảng Báo cáo giờ làm (LogTime Table)}}{31}{table.2.7}%
+\contentsline {table}{\numberline {2.8}{\ignorespaces Danh mục các màn hình chức năng và mục tiêu tương tác UI/UX thực tế}}{34}{table.2.8}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {4.1}{\ignorespaces Bảng Test Case Phân hệ Đăng nhập và Phân quyền}}{51}{table.4.1}%
+\contentsline {table}{\numberline {4.2}{\ignorespaces Bảng Test Case Phân hệ Giao việc và Bảng Kanban}}{52}{table.4.2}%
+\contentsline {table}{\numberline {4.3}{\ignorespaces Bảng Test Case Phân hệ Báo cáo và Phê duyệt Log-time}}{53}{table.4.3}%
+\contentsline {table}{\numberline {4.4}{\ignorespaces Bảng Test Case Động cơ tính toán KPI Engine}}{53}{table.4.4}%
+\addvspace {10\p@ }
