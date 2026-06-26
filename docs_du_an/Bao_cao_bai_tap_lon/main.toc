@@ -50,4 +50,5 @@
 \contentsline {section}{\numberline {5.2}Hạn chế và Hướng phát triển}{55}{section.5.2}%
 \contentsline {subsection}{\numberline {5.2.1}Các hạn chế còn tồn tại}{55}{subsection.5.2.1}%
 \contentsline {subsection}{\numberline {5.2.2}Định hướng phát triển tương lai (Tích hợp API với hệ thống HRM/Payroll)}{55}{subsection.5.2.2}%
+\contentsline {subsection}{\numberline {5.2.3}Mã nguồn và Tài liệu dự án}{56}{subsection.5.2.3}%
 \contentsline {chapter}{TÀI LIỆU THAM KHẢO}{57}{chapter*.8}%

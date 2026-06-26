@@ -173,6 +173,10 @@ INPUT c:/texlive/2026/texmf-dist/tex/generic/pgf/libraries/pgflibraryplothandler
 INPUT c:/texlive/2026/texmf-dist/tex/generic/pgf/modules/pgfmodulematrix.code.tex
 INPUT c:/texlive/2026/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzlibrarytopaths.code.tex
 INPUT c:/texlive/2026/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzlibrarytopaths.code.tex
+INPUT c:/texlive/2026/texmf-dist/tex/latex/xurl/xurl.sty
+INPUT c:/texlive/2026/texmf-dist/tex/latex/xurl/xurl.sty
+INPUT c:/texlive/2026/texmf-dist/tex/latex/url/url.sty
+INPUT c:/texlive/2026/texmf-dist/tex/latex/url/url.sty
 INPUT c:/texlive/2026/texmf-dist/tex/latex/tools/indentfirst.sty
 INPUT c:/texlive/2026/texmf-dist/tex/latex/tools/indentfirst.sty
 INPUT c:/texlive/2026/texmf-dist/tex/latex/enumitem/enumitem.sty
@@ -249,8 +253,6 @@ INPUT c:/texlive/2026/texmf-dist/tex/generic/intcalc/intcalc.sty
 INPUT c:/texlive/2026/texmf-dist/tex/latex/hyperref/puenc.def
 INPUT c:/texlive/2026/texmf-dist/tex/latex/hyperref/puenc.def
 INPUT c:/texlive/2026/texmf-dist/tex/latex/hyperref/puenc.def
-INPUT c:/texlive/2026/texmf-dist/tex/latex/url/url.sty
-INPUT c:/texlive/2026/texmf-dist/tex/latex/url/url.sty
 INPUT c:/texlive/2026/texmf-dist/tex/generic/bitset/bitset.sty
 INPUT c:/texlive/2026/texmf-dist/tex/generic/bitset/bitset.sty
 INPUT c:/texlive/2026/texmf-dist/tex/generic/bigintcalc/bigintcalc.sty
